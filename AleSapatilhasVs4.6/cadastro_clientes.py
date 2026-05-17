@@ -1,10 +1,22 @@
+"""
+cadastro_clientes.py — Cadastro unificado de contatos (CRM).
+
+Um único cadastro atende Cliente e Fornecedor (campo tipo), padrão ERP:
+  - Vendas e receitas → tipo Cliente
+  - Despesas e produtos → tipo Fornecedor
+
+Evita duplicar CPF/telefone em tabelas separadas.
+"""
+
 import tkinter as tk
 from tkinter import messagebox, ttk
-import database 
-import ui_utils
 from datetime import datetime
+import database
+import ui_utils
+
 
 class JanelaCadastroClientes(tk.Toplevel):
+    """Ficha cadastral de pessoa física (cliente ou fornecedor)."""
     def __init__(self, master, dados_cliente=None):
         super().__init__(master)
 
@@ -29,7 +41,7 @@ class JanelaCadastroClientes(tk.Toplevel):
 
         self._manter_em_primeiro_plano()
         
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=720)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=750)
 
         self.cliente_id = dados_cliente[0] if dados_cliente else None
         self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
@@ -78,41 +90,47 @@ class JanelaCadastroClientes(tk.Toplevel):
         main_frame.columnconfigure((0, 1), weight=1)
 
         # --- Título ---
-        tk.Label(main_frame, text="Ficha Cadastral do Cliente", bg=self.bg_fundo, 
+        tk.Label(main_frame, text="Ficha Cadastral do Contato", bg=self.bg_fundo, 
                  fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
+        tk.Label(main_frame, text="TIPO DE CONTATO*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=1, column=0, sticky="w", pady=(3, 0))
+        self.var_tipo = tk.StringVar(value="Cliente")
+        self.opt_tipo = tk.OptionMenu(main_frame, self.var_tipo, "Cliente", "Fornecedor")
+        self.opt_tipo.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", font=("Segoe UI", 10), cursor="hand2")
+        self.opt_tipo.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+
         # --- Campos de Entrada ---
-        self.ent_nome   = self._criar_campo(main_frame, "NOME COMPLETO*", 1)
-        self.ent_cpf    = self._criar_campo(main_frame, "CPF (APENAS NÚMEROS)*", 3)
-        self.ent_tel    = self._criar_campo(main_frame, "TELEFONE / WHATSAPP*", 5, col=0, colspan=1)
-        self.ent_email  = self._criar_campo(main_frame, "E-MAIL", 5, col=1, colspan=1)
-        self.ent_niver  = self._criar_campo(main_frame, "ANIVERSÁRIO (DD/MM)", 7, col=0, colspan=1)
-        self.ent_tam    = self._criar_campo(main_frame, "TAM. CALÇADO", 7, col=1, colspan=1)
-        self.ent_logra  = self._criar_campo(main_frame, "ENDEREÇO COMPLETO", 9)
-        self.ent_bairro = self._criar_campo(main_frame, "BAIRRO", 11, col=0, colspan=1)
-        self.ent_cidade = self._criar_campo(main_frame, "CIDADE", 11, col=1, colspan=1)
-        self.ent_cep    = self._criar_campo(main_frame, "CEP", 13, col=0, colspan=1)       
+        self.ent_nome   = self._criar_campo(main_frame, "NOME COMPLETO*", 3)
+        self.ent_cpf    = self._criar_campo(main_frame, "CPF/ CNPJ (APENAS NÚMEROS)*", 5)
+        self.ent_tel    = self._criar_campo(main_frame, "TELEFONE / WHATSAPP*", 7, col=0, colspan=1)
+        self.ent_email  = self._criar_campo(main_frame, "E-MAIL", 7, col=1, colspan=1)
+        self.ent_niver  = self._criar_campo(main_frame, "ANIVERSÁRIO (DD/MM)", 9, col=0, colspan=1)
+        self.ent_tam    = self._criar_campo(main_frame, "TAM. CALÇADO", 9, col=1, colspan=1)
+        self.ent_logra  = self._criar_campo(main_frame, "ENDEREÇO COMPLETO", 11)
+        self.ent_bairro = self._criar_campo(main_frame, "BAIRRO", 13, col=0, colspan=1)
+        self.ent_cidade = self._criar_campo(main_frame, "CIDADE", 13, col=1, colspan=1)
+        self.ent_cep    = self._criar_campo(main_frame, "CEP", 15, col=0, colspan=1)       
         
         # Campo Limite (Manual por ser específico)
-        tk.Label(main_frame, text="LIMITE DE CRÉDITO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(4,0))
+        tk.Label(main_frame, text="LIMITE DE CRÉDITO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=15, column=1, sticky="w", pady=(4,0))
         self.ent_limite = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
-        self.ent_limite.grid(row=14, column=1, sticky="ew", ipady=2)
+        self.ent_limite.grid(row=16, column=1, sticky="ew", ipady=2)
         self.ent_limite.insert(0, "0.00")
         self._aplicar_estilo_foco(self.ent_limite)
 
-        self.ent_obs = self._criar_campo(main_frame, "OBSERVAÇÕES", 15)
+        self.ent_obs = self._criar_campo(main_frame, "OBSERVAÇÕES", 17)
 
         # Status
-        tk.Label(main_frame, text="CLASSIFICAÇÃO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(8, 0))
+        tk.Label(main_frame, text="CLASSIFICAÇÃO", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=19, column=0, sticky="w", pady=(8, 0))
         self.var_status = tk.StringVar(value="Ativo")
         self.opt_status = tk.OptionMenu(main_frame, self.var_status, "Vip", "Ativo", "Inativo", "Bloqueado")
         self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status.grid(row=18, column=0, columnspan=2, sticky="ew", pady=(2, 15))
+        self.opt_status.grid(row=20, column=0, columnspan=2, sticky="ew", pady=(2, 15))
 
         # --- SEÇÃO DE BOTÕES (Refatorada) ---
         # Frame Superior: Salvar e Gerar Venda
         frame_botoes_sup = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_botoes_sup.grid(row=19, column=0, columnspan=2, sticky="ew")
+        frame_botoes_sup.grid(row=21, column=0, columnspan=2, sticky="ew")
         frame_botoes_sup.columnconfigure((0, 1), weight=1)
 
         self.btn_salvar = self._criar_botao_padrao(frame_botoes_sup, self.texto_btn, self.cor_base_acao, 
@@ -123,10 +141,10 @@ class JanelaCadastroClientes(tk.Toplevel):
 
         # Frame Inferior: Cancelar (Ocupa tudo embaixo)
         frame_botoes_inf = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_botoes_inf.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew")
+        frame_botoes_inf.grid(row=22, column=0, columnspan=2, pady=(10, 0), sticky="ew")
         frame_botoes_inf.columnconfigure(0, weight=1)
 
-        self.btn_cancelar = self._criar_botao_padrao(frame_botoes_inf, "CANCELAR", self.cor_btn_sair, 
+        self.btn_cancelar = self._criar_botao_padrao(frame_botoes_inf, "FECHAR JANELA", self.cor_btn_sair, 
                                                      self.destroy, 0, 0)
 
     def get_dados_campos(self):
@@ -144,7 +162,8 @@ class JanelaCadastroClientes(tk.Toplevel):
             "cep": self.ent_cep.get().strip(),
             "obs": self.ent_obs.get().strip(),
             "limite": self.ent_limite.get().strip() or 0,
-            "status": self.var_status.get()
+            "status": self.var_status.get(),
+            "tipo": self.var_tipo.get()
         }
 
     def salvar_dados(self):
@@ -155,7 +174,7 @@ class JanelaCadastroClientes(tk.Toplevel):
 
         try:
             dados_atualizacao = {
-                'nome': d['nome'], 'cpf': d['cpf'], 'telefone': d['tel'], 'email': d['email'],
+                'tipo': d['tipo'], 'nome': d['nome'], 'cpf': d['cpf'], 'telefone': d['tel'], 'email': d['email'],
                 'aniversario': d['niver'], 'tamanho_calcado': d['tam'], 'endereco_completo': d['endereco'],
                 'bairro': d['bairro'], 'cidade': d['cidade'], 'cep': d['cep'], 'observacao': d['obs'],
                 'limite_credito': d['limite'], 'status_cliente': d['status']
@@ -164,7 +183,10 @@ class JanelaCadastroClientes(tk.Toplevel):
                 database.atualizar_cliente(self.cliente_id, **dados_atualizacao)
                 messagebox.showinfo("Sucesso", "Cadastro atualizado!", parent=self)
             else:
-                cid = database.cadastrar_cliente(**d)
+                cid = database.cadastrar_cliente(
+                    d['nome'], d['cpf'], d['tel'], d['email'], d['niver'], d['tam'],
+                    d['endereco'], d['bairro'], d['cidade'], d['cep'], d['obs'], d['limite'], d['tipo']
+                )
                 if not cid:
                     messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique o CPF e tente novamente.", parent=self)
                     return
@@ -194,7 +216,10 @@ class JanelaCadastroClientes(tk.Toplevel):
                 database.atualizar_cliente(self.cliente_id, **dados_atualizacao)
                 cid = self.cliente_id
             else:
-                cid = database.cadastrar_cliente(**d)
+                cid = database.cadastrar_cliente(
+                    d['nome'], d['cpf'], d['tel'], d['email'], d['niver'], d['tam'],
+                    d['endereco'], d['bairro'], d['cidade'], d['cep'], d['obs'], d['limite'], d['tipo']
+                )
                 if not cid:
                     messagebox.showerror("Erro", "Não foi possível cadastrar o cliente. Verifique CPF e tente novamente.", parent=self)
                     return
@@ -220,18 +245,21 @@ class JanelaCadastroClientes(tk.Toplevel):
         return ""
 
     def preencher_dados(self, d):
+        # SELECT * : id, tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco, bairro, cidade, cep, obs, limite, data_cadastro, status
+        self.var_tipo.set(d[1] if len(d) > 1 and d[1] in ('Cliente', 'Fornecedor') else 'Cliente')
         mapping = [
-            (self.ent_nome, d[1]), (self.ent_cpf, d[2]), (self.ent_tel, d[3]),
-            (self.ent_email, d[4]), (self.ent_niver, self.formatar_data_exibicao(d[5])), (self.ent_tam, d[6]),
-            (self.ent_logra, d[7]), (self.ent_bairro, d[8]), (self.ent_cidade, d[9]),
-            (self.ent_cep, d[10]), (self.ent_obs, d[11])
+            (self.ent_nome, d[2]), (self.ent_cpf, d[3]), (self.ent_tel, d[4]),
+            (self.ent_email, d[5]), (self.ent_niver, self.formatar_data_exibicao(d[6])), (self.ent_tam, d[7]),
+            (self.ent_logra, d[8]), (self.ent_bairro, d[9]), (self.ent_cidade, d[10]),
+            (self.ent_cep, d[11]), (self.ent_obs, d[12])
         ]
         for widget, valor in mapping:
+            widget.delete(0, tk.END)
             widget.insert(0, valor if valor else "")
         
         self.ent_limite.delete(0, "end")
-        self.ent_limite.insert(0, d[12] if d[12] else "0.00")
-        self.var_status.set(d[14] if len(d) > 14 else "Ativo")
+        self.ent_limite.insert(0, f"{float(d[13] or 0):.2f}" if len(d) > 13 else "0.00")
+        self.var_status.set(d[15] if len(d) > 15 else "Ativo")
 
 if __name__ == "__main__":
     root = tk.Tk()

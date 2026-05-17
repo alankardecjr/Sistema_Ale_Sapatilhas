@@ -1,12 +1,26 @@
+"""
+gerenciar_receitas.py — Módulo financeiro de ENTRADAS (contas a receber).
+
+Escopo:
+  - Baixa de parcelas de vendas (venda_id no financeiro)
+  - Receitas avulsas e ajustes com juros/descontos
+  - Pagamento parcial: valor_pago acumulado até quitar o título
+
+Complementa cadastro_vendas.py: o PDV gera a venda; aqui liquida-se o dinheiro.
+"""
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
-import database 
+import database
 import ui_utils
 
+
 class JanelaGerenciarReceitas(tk.Toplevel):
-    def __init__(self, master, dados_receita=None):
+    """Formulário modal para recebimentos e manutenção de parcelas."""
+    def __init__(self, master, dados_receita=None, venda_id=None):
         super().__init__(master)
+        self.venda_id = venda_id
         
         # --- Paleta de cores ---
         paleta = ui_utils.get_paleta()
@@ -26,7 +40,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         self.configure(bg=self.bg_fundo)
         self.resizable(False, False)
         
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=950)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=850)
         
         self.receita_id = dados_receita[0] if dados_receita else None
         self.cliente_selecionado_id = None
@@ -41,6 +55,10 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         
         if dados_receita:
             self.preencher_dados(dados_receita)
+            if dados_receita[2]:
+                self.venda_id = dados_receita[2]
+        elif venda_id:
+            self._carregar_por_venda(venda_id)
         else:
             self.pesquisar_clientes()
             
@@ -230,14 +248,14 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         # --- BOTÕES DE AÇÃO OPERACIONAL (Dual Mode e Hover) ---
         texto_btn = "ATUALIZAR RECEITA" if self.receita_id else "SALVAR RECEITA"
         self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=20, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=7, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=4)
         
-        self.btn_deletar = tk.Button(main_frame, text="ESTORNAR / DELETAR TITULO", bg="#E74C3C", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
+        self.btn_deletar = tk.Button(main_frame, text="ESTORNAR / DELETAR TITULO", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
         self.btn_deletar.grid(row=6, column=0, columnspan=3, pady=2, sticky="ew", ipady=4)
         self.btn_deletar.grid_remove()
 
         self.btn_cancelar = tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
-        self.btn_cancelar.grid(row=7, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
+        self.btn_cancelar.grid(row=20, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
 
        # Bind Hovers
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -256,6 +274,33 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             self.ent_parc.delete(0, tk.END)
             self.ent_parc.insert(0, "1")
         self.atualizar_calculos()
+
+    def _carregar_por_venda(self, venda_id):
+        v = database.obter_venda_por_id(venda_id)
+        if not v:
+            return
+        self.cliente_selecionado_id = v[1]
+        self.ent_cliente_nome.delete(0, tk.END)
+        self.ent_cliente_nome.insert(0, v[2])
+        parcelas = database.listar_parcelas_venda(venda_id)
+        if parcelas:
+            fid = parcelas[0][0]
+            d = database.obter_financeiro_por_id(fid)
+            if d:
+                self.preencher_dados(d)
+        self.carregar_parcelas_por_venda(venda_id)
+
+    def carregar_parcelas_por_venda(self, venda_id):
+        self.tree_parcelas.delete(*self.tree_parcelas.get_children())
+        for p in database.listar_parcelas_venda(venda_id):
+            pid, pa, tot, venc, pag, val, vpago, st = p
+            self.tree_parcelas.insert("", "end", values=(
+                pid, f"{pa}/{tot}", self.formatar_data_exibicao(venc), self.formatar_data_exibicao(pag),
+                f"R$ {val:.2f}", f"R$ {(vpago or 0):.2f}", st
+            ))
+
+    def validar_e_salvar(self):
+        self.salvar_crud()
 
     def pesquisar_clientes(self, event=None):
         termo = self.ent_busca_cli.get().lower()
@@ -332,6 +377,8 @@ class JanelaGerenciarReceitas(tk.Toplevel):
 
     def preencher_dados(self, d):
         self.receita_id = d[0]
+        self.cliente_selecionado_id = d[3]
+        self.venda_id = d[2]
         self.ent_cliente_nome.delete(0, tk.END); self.ent_cliente_nome.insert(0, d[5] if d[5] else "")
         self.ent_desc.delete(0, tk.END); self.ent_desc.insert(0, d[6] if d[6] else "")
         
@@ -346,15 +393,18 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         
         self.cb_forma.set(d[12] if d[12] else "PIX")
         self.cb_recorrencia.set(d[13] if d[13] else "Não Recorrente")
-        self.cb_cat.set(d[18] if d[18] else "Venda")
+        self.cb_cat.set(d[18] if d[18] else "Venda")  # categoria
         self.cb_status.set(d[19])
         
-        self.ent_parc.delete(0, tk.END); self.ent_parc.insert(0, str(d[14]))
+        self.ent_parc.delete(0, tk.END); self.ent_parc.insert(0, str(d[14] or 1))
         self.toggle_recorrencia()
         
         self.btn_salvar.config(text="⚙️ ATUALIZAR PARCELA / RECEBIMENTO", bg=self.cor_destaque)
         self.btn_deletar.grid()
-        self.carregar_parcelas_historico(d[5], d[6])
+        if self.venda_id:
+            self.carregar_parcelas_por_venda(self.venda_id)
+        else:
+            self.carregar_parcelas_historico(d[5], d[6])
 
     def salvar_crud(self):
         nome = self.ent_cliente_nome.get().strip()
@@ -383,16 +433,25 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             return
 
         valor_liquido_calculado = round(val_base_f + enc_f - desc_f, 2)
+        st = self.cb_status.get()
+        if val_pago_f >= valor_liquido_calculado - 0.01:
+            st = 'Pago'
+            if not dat_pag:
+                dat_pag = datetime.now().strftime("%Y-%m-%d")
+        elif val_pago_f > 0:
+            st = 'Pendente'
 
         with database.conectar() as conn:
             cursor = conn.cursor()
             if self.receita_id:
                 # Modificação via CRUD Direto
                 cursor.execute("""
-                    UPDATE financeiro SET entidade_nome=?, descricao=?, valor=?, valor_base=?, valor_pago=?, encargos=?, descontos=?,
-                                          data_lancamento=?, data_vencimento=?, data_pagamento=?, forma_pagamento=?, categoria=?, status=?, recorrencia=?
+                    UPDATE financeiro SET cliente_id=?, entidade_nome=?, descricao=?, valor=?, valor_base=?, valor_pago=?,
+                                          encargos=?, descontos=?, data_lancamento=?, data_vencimento=?, data_pagamento=?,
+                                          forma_pagamento=?, categoria=?, status=?, recorrencia=?
                     WHERE id=? AND tipo='Receita'
-                """, (nome, desc, valor_liquido_calculado, val_base_f, val_pago_f, enc_f, desc_f, dat_lan, dat_ven, dat_pag, self.cb_forma.get(), self.cb_cat.get(), self.cb_status.get(), self.cb_recorrencia.get(), self.receita_id))
+                """, (self.cliente_selecionado_id, nome, desc, valor_liquido_calculado, val_base_f, val_pago_f, enc_f, desc_f,
+                      dat_lan, dat_ven, dat_pag, self.cb_forma.get(), self.cb_cat.get(), st, self.cb_recorrencia.get(), self.receita_id))
                 conn.commit()
                 messagebox.showinfo("Sucesso", "Título de Receita modificado.", parent=self)
             else:

@@ -1,10 +1,32 @@
+"""
+main.py — Ponto de entrada e navegação principal (shell do ERP).
+
+Este módulo concentra apenas orquestração de telas:
+  - Menu lateral com destaque do botão ativo
+  - Treeview dinâmica conforme o "modo" (vendas, estoque, financeiro…)
+  - Imports tardios (lazy) nos métodos abrir_* para evitar import circular
+
+Para estudar o fluxo, comece por __main__ → SistemaAleSapatilhas → setup_ui.
+"""
+
 import tkinter as tk
 from tkinter import messagebox, ttk
-import database 
 from datetime import datetime
+
+import config
+import database
 import ui_utils
 
+
 class SistemaAleSapatilhas:
+    """
+    Janela principal estilo ERP: barra lateral + área de listagem + busca.
+
+    Atributos de estado importantes:
+        modo_atual: define colunas, filtros e menu de contexto da Treeview
+        botao_menu_ativo: referência do botão destacado na sidebar
+    """
+
     def __init__(self, root):
         self.root = root
         self.root.title("Alê Sapatilhas - Gestão Integrada")
@@ -27,10 +49,13 @@ class SistemaAleSapatilhas:
 
         self.root.configure(bg=self.bg_fundo)
         self.modo_atual = "vendas"
-        self.botoes_menu = {}  # Dicionário para armazenar referências dos botões do menu
+        self.botoes_menu = {}
+        self.botoes_por_texto = {}
+        self.botao_menu_ativo = None
         
         self.setup_ui()
-        self.exibir_vendas() # Inicia visualizando vendas
+        self.botao_menu_ativo = self.botoes_por_texto.get("📑 GERENCIAR VENDAS")
+        self.exibir_vendas()
 
     def formatar_data_exibicao(self, data_str):
         if data_str:
@@ -68,15 +93,19 @@ class SistemaAleSapatilhas:
             "activeforeground": "white", "cursor": "hand2", "anchor": "w", "padx": 20
         }
 
+        # (texto, callback, modo) — modo agrupa telas relacionadas na Treeview
         botoes = [
-            ("", None, None), 
-            ("➕ ADICIONAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
-            ("📑 GERENCIAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"), 
+            ("", None, None),
+            ("➕ GERAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
+            ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
+            #("💰 GERENCIAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
+            ("📥 CONTAS A RECEBER", self.exibir_contas_a_receber, "contas_receber"),
+            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),
+            ("📤 CONTAS A PAGAR", self.exibir_contas_a_pagar, "contas_pagar"),
             ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
-            ("👥 GERENCIAR CONTATOS", self.exibir_clientes, "clientes"),
+            ("👥 LISTAR CONTATOS", self.exibir_clientes, "clientes"),
             ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
-            ("👠 GERENCIAR PRODUTOS", self.exibir_produtos, "produtos"),
+            ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
             ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
@@ -90,11 +119,12 @@ class SistemaAleSapatilhas:
                 continue
 
             # --- Criando botões com estilo e hover ---
-            btn = tk.Button(self.sidebar, text=texto, command=lambda c=comando, m=modo: self.executar_comando_menu(c, m), **btn_estilo)
+            btn = tk.Button(self.sidebar, text=texto, **btn_estilo)
+            btn.config(command=lambda c=comando, m=modo, b=btn: self.executar_comando_menu(c, m, b))
             btn.pack(fill="x", pady=2)
+            self.botoes_por_texto[texto] = btn
             self.aplicar_hover(btn)
 
-            # Armazenar referência se tem modo associado
             if modo:
                 self.botoes_menu.setdefault(modo, []).append(btn)
 
@@ -209,17 +239,22 @@ class SistemaAleSapatilhas:
         # Executa a restauração da lista original baseado no modo atual
         self.atualizar_lista()
 
-    def executar_comando_menu(self, comando, modo):
-        if comando: comando()
+    def executar_comando_menu(self, comando, modo, btn=None):
+        if comando:
+            comando()
         if modo:
             self.modo_atual = modo
-            self.atualizar_destaque_menu()
+        if btn is not None:
+            self.botao_menu_ativo = btn
+        self.atualizar_destaque_menu()
 
     def atualizar_destaque_menu(self):
-        """Atualiza destaque visual do botão do menu ativo"""
-        for modo, botoes in self.botoes_menu.items():
-            for btn in botoes:
-                btn.config(bg=self.cor_destaque if modo == self.modo_atual else self.cor_btn_menu)
+        """Destaca apenas o botão de menu selecionado pelo usuário."""
+        for texto, btn in self.botoes_por_texto.items():
+            if btn == self.botao_menu_ativo:
+                btn.config(bg=self.cor_destaque, fg="white")
+            else:
+                btn.config(bg=self.cor_btn_menu, fg="white")
 
     def confirmar_acao_menu(self, titulo, func, mensagem=None):
         """Mostra confirmação antes de executar uma ação de menu de contexto."""
@@ -246,6 +281,8 @@ class SistemaAleSapatilhas:
     # --- Funções de carregamento ---
     def exibir_clientes(self):
         self.modo_atual = "clientes"
+        self.botao_menu_ativo = self.botoes_por_texto.get("👥 GERENCIAR CONTATOS")
+        self.atualizar_destaque_menu()
         self.lbl_titulo.config(text="👥 CONTATOS")
         self.preparar_colunas(("tipo", "nome", "cpf/cnpj", "telefone", "aniversario", "calcado", "limite", "status"))    
         for c in database.exibir_clientes():
@@ -254,14 +291,17 @@ class SistemaAleSapatilhas:
 
     def exibir_produtos(self):
         self.modo_atual = "produtos"
+        self.botao_menu_ativo = self.botoes_por_texto.get("👠 GERENCIAR PRODUTOS")
+        self.atualizar_destaque_menu()
         self.lbl_titulo.config(text="👠 ESTOQUE")
         self.preparar_colunas(("sku", "produto", "material", "cor", "tamanho", "estoque", "preço", "fornecedor", "status"))
-        for i in database.exibir_produtos():
-            # i[1]=sku, i[3]=produto, i[10]=material, i[4]=cor, i[5]=tamanho, i[8]=quantidade, i[7]=precovenda, i[11]=fornecedor, i[12]=status_item
+        for i in database.exibir_produtos_com_fornecedor():
             self.tree.insert("", "end", iid=i[0], values=(i[1], i[3], i[10], i[4], i[5], i[8], f"R$ {i[7]:.2f}", i[11], i[12]))
 
     def exibir_vendas(self):
         self.modo_atual = "vendas"
+        self.botao_menu_ativo = self.botoes_por_texto.get("📑 GERENCIAR VENDAS")
+        self.atualizar_destaque_menu()
         self.lbl_titulo.config(text="📑 VENDAS")
         self.preparar_colunas(("cliente", "total", "forma", "data", "status"))
         for v in database.relatorio_vendas_geral():
@@ -269,6 +309,8 @@ class SistemaAleSapatilhas:
    
     def exibir_financeiro(self):
         self.modo_atual = "financeiro"
+        self.botao_menu_ativo = self.botoes_por_texto.get("📉 FLUXO DE CAIXA")
+        self.atualizar_destaque_menu()
         self.lbl_titulo.config(text="💸 FLUXO DE CAIXA")
         self.preparar_colunas(("tipo", "nome", "descrição", "valor", "vencimento", "pagamento", "forma", "categoria", "recorrencia", "status"))
         for f in database.obter_todos_registros_financeiros():
@@ -276,15 +318,66 @@ class SistemaAleSapatilhas:
             self.tree.insert("", "end", iid=f[0], values=(f[1], f[2], f[3], f"R$ {f[4]:.2f}", self.formatar_data_exibicao(f[5]), self.formatar_data_exibicao(f[6]), f[7], f[8], f[9], f[10]), tags=tag)
 
     def exibir_dashboard(self):
+        """KPIs operacionais — visão executiva sem sair da tela principal."""
+        self.modo_atual = "dashboard"
+        self.botao_menu_ativo = self.botoes_por_texto.get("📊 DASHBOARD")
+        self.atualizar_destaque_menu()
         res = database.dashboard_resumo()
-        msg = f"📊 STATUS DA LOJA\n{'-'*30}\nContas a Receber: R$ {res['total_a_receber']:.2f}\n"
-        if res['alertas_estoque']:
-            msg += f"\n🚨 ALERTAS DE ESTOQUE:\n"
-            for item in res['alertas_estoque']: msg += f"- {item[0]}: {item[1]} un.\n"
-        else: msg += "\n✅ Estoque em dia!"
-        messagebox.showinfo("Dashboard Pro", msg)
+        msg = (
+            f"📊 PAINEL DA LOJA\n{'-'*34}\n"
+            f"Contas a receber: R$ {res['total_a_receber']:.2f}\n"
+            f"Contas a pagar:    R$ {res['total_a_pagar']:.2f}\n"
+            f"Vendas finalizadas: {res['vendas_finalizadas']}\n"
+        )
+        if res["alertas_estoque"]:
+            msg += f"\n🚨 ESTOQUE BAIXO (<{config.LIMITE_ESTOQUE_ALERTA} un.):\n"
+            for item in res["alertas_estoque"]:
+                msg += f"  • {item[0]}: {item[1]} un.\n"
+        else:
+            msg += "\n✅ Estoque dentro do limite de alerta."
+        messagebox.showinfo("Dashboard", msg, parent=self.root)
 
-    # --- Janelas (Imports Lazy para evitar erros de circularidade) ---
+    def exibir_contas_a_receber(self):
+        """Relatório de títulos de Receita em aberto (ordenados por vencimento)."""
+        self.modo_atual = "contas_receber"
+        self.botao_menu_ativo = self.botoes_por_texto.get("📥 CONTAS A RECEBER")
+        self.atualizar_destaque_menu()
+        self.lbl_titulo.config(text="📥 CONTAS A RECEBER")
+        self.preparar_colunas(("cliente", "descrição", "valor", "pago", "saldo", "vencimento", "status"))
+        for row in database.listar_titulos_abertos(config.TIPO_RECEITA):
+            _id, nome, desc, valor, pago, venc, status, saldo = row
+            self.tree.insert("", "end", iid=_id, values=(
+                nome, desc, f"R$ {valor:.2f}", f"R$ {(pago or 0):.2f}", f"R$ {saldo:.2f}",
+                self.formatar_data_exibicao(venc), status,
+            ))
+
+    def exibir_contas_a_pagar(self):
+        """Relatório de títulos de Despesa em aberto."""
+        self.modo_atual = "contas_pagar"
+        self.botao_menu_ativo = self.botoes_por_texto.get("📤 CONTAS A PAGAR")
+        self.atualizar_destaque_menu()
+        self.lbl_titulo.config(text="📤 CONTAS A PAGAR")
+        self.preparar_colunas(("fornecedor", "descrição", "valor", "pago", "saldo", "vencimento", "status"))
+        for row in database.listar_titulos_abertos(config.TIPO_DESPESA):
+            _id, nome, desc, valor, pago, venc, status, saldo = row
+            self.tree.insert("", "end", iid=_id, values=(
+                nome, desc, f"R$ {valor:.2f}", f"R$ {(pago or 0):.2f}", f"R$ {saldo:.2f}",
+                self.formatar_data_exibicao(venc), status,
+            ))
+
+    # --- Janelas modais (import tardio = lazy import, boa prática em Tkinter) ---
+    def abrir_gerenciar_receitas(self):
+        from gerenciar_receitas import JanelaGerenciarReceitas
+        JanelaGerenciarReceitas(self.root)
+        if self.modo_atual in ("financeiro", "contas_receber"):
+            self.atualizar_lista()
+
+    def abrir_gerenciar_despesas(self):
+        from gerenciar_despesas import JanelaGerenciarDespesas
+        JanelaGerenciarDespesas(self.root)
+        if self.modo_atual in ("financeiro", "contas_pagar"):
+            self.atualizar_lista()
+
     def abrir_cadastro_vendas(self):
         selection = self.tree.selection()
         cliente_selecionado = None
@@ -294,11 +387,6 @@ class SistemaAleSapatilhas:
         from cadastro_vendas import JanelaCadastroVendas
         JanelaCadastroVendas(self.root, cliente_selecionado)
         self.exibir_vendas()
-
-    def abrir_cadastro_despesas(self):
-        from gerenciar_despesas import JanelaGerenciarDespesas
-        JanelaGerenciarDespesas(self.root)
-        self.exibir_financeiro()
 
     def abrir_cadastro_cliente(self):
         from cadastro_clientes import JanelaCadastroClientes
@@ -338,37 +426,32 @@ class SistemaAleSapatilhas:
         elif self.modo_atual == "financeiro":
             self.editar_financeiro_registro()
 
+        elif self.modo_atual == "contas_receber":
+            self.editar_financeiro_registro()
+
+        elif self.modo_atual == "contas_pagar":
+            self.editar_financeiro_registro()
+
         elif self.modo_atual == "vendas":
             self.editar_venda()
 
     def editar_financeiro_registro(self):
+        """Roteamento: tipo do título define qual módulo financeiro abrir."""
         item = self.tree.selection()
-        if not item: return
+        if not item:
+            return
         registro_id = item[0]
-
-        from gerenciar_despesas import JanelaGerenciarDespesas
-        from gerenciar_receitas import JanelaGerenciarReceitas
-
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT tipo, venda_id FROM financeiro WHERE id = ?", (registro_id,))
-            result = cursor.fetchone()
-            if not result: return
-
-            tipo, venda_id = result
-            if tipo == "Despesa":
-                cursor.execute("SELECT * FROM financeiro WHERE id = ?", (registro_id,))
-                dados = cursor.fetchone()
-                if dados:
-                    JanelaGerenciarDespesas(self.root, dados_despesa=dados)
-                    self.exibir_financeiro()
-            elif tipo == "Receita" and venda_id:
-                cursor.execute("SELECT v.id, c.id, c.nome, c.cpf, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda FROM vendas v JOIN clientes c ON v.cliente_id = c.id WHERE v.id = ?", (venda_id,))
-                dados = cursor.fetchone()
-                if dados:
-                    dados_venda = {'id': dados[0], 'cliente': f"{dados[2]} - {dados[3]} - {dados[4]}", 'total': dados[5], 'forma': dados[6], 'parcelas': dados[7], 'desconto': dados[8], 'data': dados[9]}
-                    JanelaGerenciarReceitas(self.root, cliente_selecionado=(dados[1], dados[2], dados[3]), dados_venda=dados_venda)
-                    self.exibir_vendas()
+        dados = database.obter_financeiro_por_id(registro_id)
+        if not dados:
+            return
+        tipo = dados[1]
+        if tipo == config.TIPO_DESPESA:
+            from gerenciar_despesas import JanelaGerenciarDespesas
+            JanelaGerenciarDespesas(self.root, dados_despesa=dados)
+        elif tipo == config.TIPO_RECEITA:
+            from gerenciar_receitas import JanelaGerenciarReceitas
+            JanelaGerenciarReceitas(self.root, dados_receita=dados, venda_id=dados[2])
+        self.atualizar_lista()
 
     # --- Função para mostrar menu de contexto ---
     def mostrar_menu_contexto(self, event):
@@ -381,7 +464,7 @@ class SistemaAleSapatilhas:
                 menu.add_command(label="Editar Contato", command=self.editar_selecionado)
                 menu.add_command(label="Visualizar Contato", command=self.visualizar_cliente)
                 menu.add_separator()
-                for status in ["✓ Ativo", "★ VIP", "⛔ Bloqueado", "✗ Inativo"]:
+                for status in ["✓ Ativo", "★ VIP", "⛔ Bloqueado"]:
                     menu.add_command(label=status, command=lambda s=status: self._mudar_status_cliente(s))
                 
             elif self.modo_atual == "produtos":
@@ -392,22 +475,33 @@ class SistemaAleSapatilhas:
                     menu.add_command(label=status, command=lambda s=status: self._mudar_status_produto(s))
                 
             elif self.modo_atual == "financeiro":
-                # Verificar o tipo do registro selecionado
                 valores = self.tree.item(item, "values")
                 tipo_reg = valores[0] if valores else "Registro"
-                menu.add_command(label=f"Editar {tipo_reg}", command=self.editar_selecionado)
+                if tipo_reg == "Receita":
+                    menu.add_command(label="Receber / Baixar parcela", command=self.editar_financeiro_registro)
+                else:
+                    menu.add_command(label="Pagar / Editar despesa", command=self.editar_financeiro_registro)
                 menu.add_command(label=f"Visualizar {tipo_reg}", command=self.visualizar_despesa)
                 menu.add_separator()
-                for status in ["◎ Pendente", "✓ Pago", "⚠ Atrasado", "✗ Cancelado"]:
+                for status in ["✓ Pago", "◎ Pendente", "⚠ Atrasado", "✗ Cancelado"]:
                     menu.add_command(label=status, command=lambda s=status: self._mudar_status_despesa(s))
                 
             elif self.modo_atual == "vendas":
-                menu.add_command(label="Editar Venda", command=self.editar_venda)
+                menu.add_command(label="Editar itens da venda (PDV)", command=self.editar_venda)
+                menu.add_command(label="Financeiro / Receber", command=self.abrir_financeiro_venda)
                 menu.add_command(label="Visualizar Venda", command=self.visualizar_venda)
                 menu.add_separator()
                 for status in ["✓ Finalizada", "⏳ Pendente", "✗ Cancelada"]:
                     menu.add_command(label=status, command=lambda s=status: self._mudar_status_venda(s))
-                
+
+            elif self.modo_atual == "contas_receber":
+                menu.add_command(label="Baixar / Receber parcela", command=self.editar_financeiro_registro)
+                menu.add_command(label="Visualizar título", command=self.visualizar_despesa)
+
+            elif self.modo_atual == "contas_pagar":
+                menu.add_command(label="Pagar / Editar despesa", command=self.editar_financeiro_registro)
+                menu.add_command(label="Visualizar título", command=self.visualizar_despesa)
+
             menu.post(event.x_root, event.y_root)
 
     def excluir_logico(self):
@@ -444,16 +538,25 @@ class SistemaAleSapatilhas:
 
     # --- Funções do menu de contexto ---
     # Cada função de mudança de status agora inclui uma confirmação e, no caso das despesas, uma lógica específica para lidar com a data de pagamento.
+    def abrir_financeiro_venda(self):
+        item = self.tree.selection()
+        if not item:
+            return
+        from gerenciar_receitas import JanelaGerenciarReceitas
+        JanelaGerenciarReceitas(self.root, venda_id=item[0])
+
     def _mudar_status_cliente(self, novo_status):
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?"):
-            database.atualizar_cliente(item[0], status_cliente=novo_status)
+        st = ui_utils.normalizar_status_menu(novo_status, ui_utils.STATUS_MENU_CLIENTE)
+        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{st}'?"):
+            database.atualizar_cliente(item[0], status_cliente=st)
             self.exibir_clientes()
 
     def _mudar_status_produto(self, novo_status):
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{novo_status}'?"):
-            database.atualizar_produto(item[0], status_item=novo_status)
+        st = ui_utils.normalizar_status_menu(novo_status, ui_utils.STATUS_MENU_PRODUTO)
+        if item and messagebox.askyesno("Confirmar", f"Alterar status para '{st}'?"):
+            database.atualizar_produto(item[0], status_item=st)
             self.exibir_produtos()
 
     def _mudar_status_despesa(self, novo_status):
@@ -464,7 +567,8 @@ class SistemaAleSapatilhas:
         id_banco = item[0]
         data_pagamento = None
 
-        # 1. Se o novo status for "Pago", processa a regra da data atual
+        novo_status = ui_utils.normalizar_status_menu(novo_status, ui_utils.STATUS_MENU_FINANCEIRO)
+
         if novo_status == "Pago":
             # Busca a data de pagamento atual no banco de dados
             with database.conectar() as conn:
@@ -506,26 +610,35 @@ class SistemaAleSapatilhas:
 
     def _mudar_status_venda(self, novo_status):
         item = self.tree.selection()
-        if item and messagebox.askyesno("Confirmar", f"Mudar status da venda para {novo_status}?"):
+        st = ui_utils.normalizar_status_menu(novo_status, ui_utils.STATUS_MENU_VENDA)
+        if not item:
+            return
+        if st == "Cancelada":
+            if messagebox.askyesno("Confirmar", "Estornar esta venda e devolver estoque?"):
+                ok, msg = database.cancelar_venda(item[0])
+                if ok:
+                    messagebox.showinfo("Sucesso", msg)
+                    self.exibir_vendas()
+                else:
+                    messagebox.showerror("Erro", msg)
+            return
+        if messagebox.askyesno("Confirmar", f"Mudar status da venda para {st}?"):
             with database.conectar() as conn:
-                cursor = conn.cursor()
-                cursor.execute("UPDATE vendas SET status_venda = ? WHERE id = ?", (novo_status, item[0]))
+                conn.execute("UPDATE vendas SET status_venda = ? WHERE id = ?", (st, item[0]))
                 conn.commit()
             self.exibir_vendas()
   
     # --- Função de edição específica para vendas, que abre a janela de cadastro de vendas já preenchida com os dados da venda selecionada ---
     def editar_venda(self):
         item = self.tree.selection()
-        if not item: return
+        if not item:
+            return
         from cadastro_vendas import JanelaCadastroVendas
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT v.id, c.nome, c.telefone, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.desconto, v.data_venda FROM vendas v JOIN clientes c ON v.cliente_id = c.id WHERE v.id = ?", (item[0],))
-            dados = cursor.fetchone()
-            if dados:
-                dados_venda = {'id': dados[0], 'cliente': f"{dados[1]} - {dados[2]}", 'total': dados[3], 'forma': dados[4], 'parcelas': dados[5], 'desconto': dados[6], 'data': dados[7]}
-                JanelaCadastroVendas(self.root, dados_venda=dados_venda)
-                self.exibir_vendas()
+        v = database.obter_venda_por_id(item[0])
+        if v:
+            dados_venda = {'id': v[0], 'desconto': v[6], 'forma': v[8], 'parcelas': v[9]}
+            JanelaCadastroVendas(self.root, dados_venda=dados_venda)
+            self.exibir_vendas()
   
     def editar_despesa(self):
         item = self.tree.selection()
@@ -567,20 +680,20 @@ class SistemaAleSapatilhas:
         ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
         
         info_text = f"""
-Tipo: {dados[1]}
-Nome: {dados[2]}
-CPF: {dados[3] or 'N/A'}
-Telefone: {dados[4] or 'N/A'}
-Email: {dados[5] or 'N/A'}
-Aniversário: {dados[6] or 'N/A'}
-Tamanho Calçado: {dados[7] or 'N/A'}
-Endereço: {dados[8] or 'N/A'}
-Bairro: {dados[9] or 'N/A'}
-Cidade: {dados[10] or 'N/A'}
-CEP: {dados[11] or 'N/A'}
-Observação: {dados[12] or 'N/A'}
-Limite de Crédito: R$ {dados[13]:.2f}
-Status: {dados[14]}
+Tipo: {dados[0]}
+Nome: {dados[1]}
+CPF: {dados[2] or 'N/A'}
+Telefone: {dados[3] or 'N/A'}
+Email: {dados[4] or 'N/A'}
+Aniversário: {dados[5] or 'N/A'}
+Tamanho Calçado: {dados[6] or 'N/A'}
+Endereço: {dados[7] or 'N/A'}
+Bairro: {dados[8] or 'N/A'}
+Cidade: {dados[9] or 'N/A'}
+CEP: {dados[10] or 'N/A'}
+Observação: {dados[11] or 'N/A'}
+Limite de Crédito: R$ {float(dados[12] or 0):.2f}
+Status: {dados[13]}
         """
 
         frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
@@ -597,7 +710,11 @@ Status: {dados[14]}
 
         with database.conectar() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT tipo, entidade_nome, descricao, valor, parcela_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia FROM financeiro WHERE id = ?", (id_banco,))
+            cursor.execute("""
+                SELECT tipo, entidade_nome, descricao, valor, parcelas_atual, total_parcelas,
+                       data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia
+                FROM financeiro WHERE id = ?
+            """, (id_banco,))
             dados = cursor.fetchone()
 
         if not dados:
@@ -663,6 +780,10 @@ Recorrência: {recorrencia or 'Não Recorrente'}
             self.exibir_vendas()
         elif self.modo_atual == "dashboard":
             self.exibir_dashboard()
+        elif self.modo_atual == "contas_receber":
+            self.exibir_contas_a_receber()
+        elif self.modo_atual == "contas_pagar":
+            self.exibir_contas_a_pagar()
 
 
     def confirmar_saida(self):
@@ -670,7 +791,8 @@ Recorrência: {recorrencia or 'Não Recorrente'}
             self.root.destroy()
 
 if __name__ == "__main__":
-    database.criar_tabelas() 
+    # Garante schema antes de qualquer tela (padrão "migration on startup")
+    database.criar_tabelas()
     root = tk.Tk()
     app = SistemaAleSapatilhas(root)
     root.mainloop()

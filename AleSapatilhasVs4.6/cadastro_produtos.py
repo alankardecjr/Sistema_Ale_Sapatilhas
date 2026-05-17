@@ -1,11 +1,20 @@
+"""
+cadastro_produtos.py — Gestão de estoque e ficha técnica do produto.
+
+Integração com contatos: fornecedor_id referencia clientes (tipo Fornecedor).
+SKU único com variação automática quando cor/tamanho divergem.
+"""
+
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 from datetime import datetime
-import database 
+import database
 import ui_utils
-import os
+
 
 class JanelaCadastroProdutos(tk.Toplevel):
+    """Cadastro de SKU, grade (cor/tamanho) e vínculo com fornecedor."""
     def __init__(self, master, dados_produto=None):
         super().__init__(master)
         
@@ -31,9 +40,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self._manter_em_primeiro_plano()
         
         # --- Aplicar dimensões padrão (600px largura, altura ajustada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=600, altura_desejada=850)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=850)
 
         self.produto_id = dados_produto[0] if dados_produto else None
+        self.fornecedor_id = None
         
         self.list_categorias = ["Sapatilhas", "Rasteiras", "Salto Fino", "Salto Block", "Mules", "Tênis", "Botas", "Biquinis", "Roupas"]     
         self.list_materiais = ["Couro", "Camurça", "Nobuck", "PU", "Verniz", "Algodão", "Poliamida", "Suplex"]      
@@ -144,36 +154,48 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                   relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
         self.ent_venda.grid(row=10, column=1, sticky="ew", ipady=3)
 
-        self.ent_forn = criar_campo(main_frame, "FORNECEDOR*", 11)
+        tk.Label(main_frame, text="FORNECEDOR (CADASTRO UNIFICADO)*", bg=self.bg_fundo, fg=self.cor_lbl,
+                 font=("Segoe UI", 8, "bold")).grid(row=11, column=0, columnspan=2, sticky="w", pady=(3, 0))
+        self.ent_busca_forn = tk.Entry(main_frame, font=("Segoe UI", 9), bg=self.bg_card, relief="flat", highlightthickness=1, highlightbackground=self.cor_borda)
+        self.ent_busca_forn.grid(row=12, column=0, columnspan=2, sticky="ew", ipady=3)
+        self.ent_busca_forn.bind("<KeyRelease>", self.pesquisar_fornecedores_produto)
+        aplicar_estilo_foco(self.ent_busca_forn)
+        self.tree_forn = ttk.Treeview(main_frame, columns=("id", "nome"), show="headings", height=2, style="Busca.Treeview")
+        self.tree_forn.heading("id", text="ID"); self.tree_forn.heading("nome", text="FORNECEDOR")
+        self.tree_forn.column("id", width=40, anchor="center")
+        self.tree_forn.grid(row=13, column=0, columnspan=2, sticky="ew", pady=2)
+        self.tree_forn.bind("<<TreeviewSelect>>", self.selecionar_fornecedor_produto)
+        self.ent_forn = criar_campo(main_frame, "FORNECEDOR SELECIONADO", 14)
+        self.ent_forn.config(state="readonly")
 
         # --- Campo Data do Lançamento ---
         tk.Label(main_frame, text="DATA DO LANÇAMENTO", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=13, column=0, sticky="w", pady=(3, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=16, column=0, sticky="w", pady=(3, 0))
         self.ent_data_lancamento = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, fg=self.cor_texto,
                                            relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
-        self.ent_data_lancamento.grid(row=14, column=0, sticky="ew", ipady=3, padx=(0, 5))
+        self.ent_data_lancamento.grid(row=17, column=0, sticky="ew", ipady=3, padx=(0, 5))
         self.ent_data_lancamento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         aplicar_estilo_foco(self.ent_data_lancamento)
 
         # --- Campo Status do Item ---
         tk.Label(main_frame, text="STATUS DO ITEM*", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=13, column=1, sticky="w", pady=(3, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=16, column=1, sticky="w", pady=(3, 0))
         self.var_status = tk.StringVar(value="Disponível")
         self.opt_status = tk.OptionMenu(main_frame, self.var_status, *self.list_status)
         self.opt_status.config(bg=self.bg_card, fg=self.cor_texto, relief="flat", highlightthickness=1, 
                                 highlightbackground=self.cor_borda, font=("Segoe UI", 10), cursor="hand2")
-        self.opt_status.grid(row=14, column=1, sticky="ew", pady=(1, 0))
+        self.opt_status.grid(row=17, column=1, sticky="ew", pady=(1, 0))
 
         # --- GRADE DE ESTOQUE E FOTO ---
         tk.Label(main_frame, text="GRADE DE ESTOQUE", bg=self.bg_fundo, fg=self.cor_texto, 
-                 font=("Segoe UI", 9, "bold")).grid(row=15, column=0, sticky="w", pady=(10, 2))
+                 font=("Segoe UI", 9, "bold")).grid(row=18, column=0, sticky="w", pady=(10, 2))
         
         tk.Label(main_frame, text="FOTO DO PRODUTO", bg=self.bg_fundo, fg=self.cor_texto, 
-                 font=("Segoe UI", 9, "bold")).grid(row=15, column=1, sticky="w", pady=(10, 2))
+                 font=("Segoe UI", 9, "bold")).grid(row=18, column=1, sticky="w", pady=(10, 2))
         
         # Frame para grade e foto lado a lado
         frame_conteudo = tk.Frame(main_frame, bg=self.bg_fundo)
-        frame_conteudo.grid(row=16, column=0, columnspan=2, sticky="ew", pady=(0, 10))
+        frame_conteudo.grid(row=19, column=0, columnspan=2, sticky="ew", pady=(0, 10))
         frame_conteudo.columnconfigure(0, weight=1)
         frame_conteudo.columnconfigure(1, weight=1)
 
@@ -202,10 +224,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
         # --- Campo SKU (no final, apenas visualização) ---
         tk.Label(main_frame, text="CÓDIGO DO PRODUTO (SKU)", bg=self.bg_fundo, fg=self.cor_lbl, 
-                 font=("Segoe UI", 8, "bold")).grid(row=17, column=0, sticky="w", pady=(10, 0))
+                 font=("Segoe UI", 8, "bold")).grid(row=20, column=0, sticky="w", pady=(10, 0))
         self.ent_sku = tk.Entry(main_frame, font=("Segoe UI", 10, "bold"), bg="#F8FAFC", fg=self.cor_destaque, 
                                relief="flat", highlightbackground=self.cor_borda, highlightthickness=1, state="readonly")
-        self.ent_sku.grid(row=18, column=0, columnspan=2, sticky="ew", ipady=3, pady=(0, 10))
+        self.ent_sku.grid(row=21, column=0, columnspan=2, sticky="ew", ipady=3, pady=(0, 10))
         
         # --- BOTÕES (Dual Mode e Hover) ---
         texto_botao = "ATUALIZAR PRODUTO" if self.produto_id else "SALVAR PRODUTO"
@@ -214,12 +236,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.btn_salvar = tk.Button(main_frame, text=texto_botao, bg=cor_base_acao, fg="white", 
                                     font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                     command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=19, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=22, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
         
-        self.btn_cancelar = tk.Button(main_frame, text="CANCELAR", bg=self.cor_btn_sair, fg="white", 
+        self.btn_cancelar = tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_btn_sair, fg="white", 
                                       font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", 
                                       command=self.destroy)
-        self.btn_cancelar.grid(row=20, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_cancelar.grid(row=23, column=0, columnspan=2, pady=(10, 0), sticky="ew", ipady=6)
 
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=cor_base_acao))
@@ -233,19 +255,33 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self.menu_contexto.add_separator()
         self.menu_contexto.add_command(label="✓ Disponível", command=self.disponibilizar_produto_menu)
         self.menu_contexto.add_command(label="✗ Indisponível", command=self.indisponibilizar_produto_menu)
-        self.menu_contexto.add_command(label="⊘ Esgotado", command=self.esgotado_produto_menu)
         self.menu_contexto.add_command(label="⭐ Promocional", command=self.promocional_produto_menu)
-        self.menu_contexto.add_command(label="🔄 Restaurar", command=self.restaurar_produto_menu)
-        self.menu_contexto.add_separator()
-        self.menu_contexto.add_command(label="Sair", command=self.destroy)
 
         # Bindings para treeview
         self.tree_busca.bind("<Double-1>", self.editar_produto_duplo_clique)
         self.tree_busca.bind("<Button-3>", self.menu_contexto_produto)
 
         self.atualizar_tree_busca()
+        self.pesquisar_fornecedores_produto()
         if not self.produto_id:  # Só gera SKU automático para novos produtos
             self.gerar_sku_automatico()
+
+    def pesquisar_fornecedores_produto(self, event=None):
+        termo = self.ent_busca_forn.get().strip()
+        self.tree_forn.delete(*self.tree_forn.get_children())
+        for f in database.listar_contatos(tipo='Fornecedor', termo=termo):
+            self.tree_forn.insert("", "end", values=(f[0], f[2]))
+
+    def selecionar_fornecedor_produto(self, event=None):
+        sel = self.tree_forn.selection()
+        if not sel:
+            return
+        vals = self.tree_forn.item(sel[0], "values")
+        self.fornecedor_id = vals[0]
+        self.ent_forn.config(state="normal")
+        self.ent_forn.delete(0, tk.END)
+        self.ent_forn.insert(0, vals[1])
+        self.ent_forn.config(state="readonly")
 
     def calcular_markup(self, event=None):
         try:
@@ -293,11 +329,12 @@ class JanelaCadastroProdutos(tk.Toplevel):
                 "cat": self.cb_cat.get(), 
                 "mat": self.cb_mat.get(),
                 "forn": self.ent_forn.get().strip(),
+                "forn_id": self.fornecedor_id,
                 "status": self.var_status.get()
             }
 
-            if not d["produto"] or not d["cor"] or not d["custo"]:
-                messagebox.showwarning("Atenção", "Preencha os campos obrigatórios.", parent=self)
+            if not d["produto"] or not d["cor"] or not d["custo"] or not d["forn_id"]:
+                messagebox.showwarning("Atenção", "Preencha os campos obrigatórios e selecione um fornecedor cadastrado.", parent=self)
                 return
             if self.produto_id:
                 if d["qtd"] < 0:
@@ -348,7 +385,9 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                 precocusto=d["custo"], 
                                 precovenda=d["venda"],
                                 quantidade=nova_qtde, 
-                                status_item=d["status"]
+                                status_item=d["status"],
+                                fornecedor=d["forn"],
+                                fornecedor_id=d["forn_id"]
                             )
                             
                             if (preco_mudou or qtd_add > 0) and d["qtd"] > 0:
@@ -366,8 +405,9 @@ class JanelaCadastroProdutos(tk.Toplevel):
                         # Atributos diferentes - gerar novo SKU
                         novo_sku = self._gerar_sku_variacao(d["sku"])
                         criado = database.cadastrar_produto(
-                            novo_sku, d["produto"], d["cor"], d["tam"],
-                            d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
+                            novo_sku, 'Calçados', d["produto"], d["cor"], d["tam"],
+                            d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"],
+                            getattr(self, 'caminho_foto', ''), fornecedor_id=d["forn_id"]
                         )
                         if not criado:
                             messagebox.showerror("Erro", "Falha ao cadastrar nova variação do produto.", parent=self)
@@ -388,8 +428,9 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     # Descrição diferente - sempre novo SKU
                     novo_sku = self._gerar_sku_novo(d["produto"], d["cor"])
                     criado = database.cadastrar_produto(
-                        novo_sku, d["produto"], d["cor"], d["tam"],
-                        d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
+                        novo_sku, 'Calçados', d["produto"], d["cor"], d["tam"],
+                        d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"],
+                        getattr(self, 'caminho_foto', ''), fornecedor_id=d["forn_id"]
                     )
                     if not criado:
                         messagebox.showerror("Erro", "Falha ao cadastrar novo produto.", parent=self)
@@ -409,8 +450,9 @@ class JanelaCadastroProdutos(tk.Toplevel):
             else:
                 # Novo produto
                 criado = database.cadastrar_produto(
-                    d["sku"], d["produto"], d["cor"], d["tam"], 
-                    d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"], getattr(self, 'caminho_foto', '')
+                    d["sku"], 'Calçados', d["produto"], d["cor"], d["tam"], 
+                    d["custo"], d["venda"], d["qtd"], d["cat"], d["mat"], d["forn"],
+                    getattr(self, 'caminho_foto', ''), fornecedor_id=d["forn_id"]
                 )
                 if not criado:
                     messagebox.showerror("Erro", "Falha ao cadastrar produto.", parent=self)
@@ -438,19 +480,25 @@ class JanelaCadastroProdutos(tk.Toplevel):
 
     def preencher_dados(self, d):
         self.produto_id = d[0]
+        self.ent_sku.config(state="normal")
         self.ent_sku.delete(0, tk.END); self.ent_sku.insert(0, d[1] if d[1] else "")
-        self.ent_produto.delete(0, tk.END); self.ent_produto.insert(0, d[2])
-        self.cb_cor.set(d[3]); self.cb_tam.set(str(d[4]))
-        self.ent_custo.delete(0, tk.END); self.ent_custo.insert(0, f"{d[5]:.2f}")
-        self.ent_venda.delete(0, tk.END); self.ent_venda.insert(0, f"{d[6]:.2f}")
-        quantidade_atual = d[7]
+        self.ent_sku.config(state="readonly")
+        self.ent_produto.delete(0, tk.END); self.ent_produto.insert(0, d[3])
+        self.cb_cor.set(d[4]); self.cb_tam.set(str(d[5]))
+        self.ent_custo.delete(0, tk.END); self.ent_custo.insert(0, f"{d[6]:.2f}")
+        self.ent_venda.delete(0, tk.END); self.ent_venda.insert(0, f"{d[7]:.2f}")
+        quantidade_atual = d[8]
         self.ent_qtd.delete(0, tk.END)
         self.ent_qtd.insert(0, "0")
         self.lbl_qtd_atual.config(text=f"Quantidade atual em estoque: {quantidade_atual}")
-        self.cb_cat.set(d[8]); self.cb_mat.set(d[9])
-        self.ent_forn.delete(0, tk.END); self.ent_forn.insert(0, d[10] if d[10] else "")
-        self.var_status.set(d[11])
-        self.caminho_foto = d[12] if len(d) > 12 else ""
+        self.cb_cat.set(d[9]); self.cb_mat.set(d[10])
+        self.fornecedor_id = d[15] if len(d) > 15 else None
+        self.ent_forn.config(state="normal")
+        self.ent_forn.delete(0, tk.END)
+        self.ent_forn.insert(0, d[11] if d[11] else "")
+        self.ent_forn.config(state="readonly")
+        self.var_status.set(d[12])
+        self.caminho_foto = d[13] if len(d) > 13 else ""
         if self.caminho_foto:
             self.exibir_foto_preview()
         self.btn_salvar.config(text="ATUALIZAR PRODUTO", bg=self.cor_hover_field)
@@ -684,55 +732,6 @@ class JanelaCadastroProdutos(tk.Toplevel):
                     self.master.exibir_produtos()
             except Exception as e:
                 messagebox.showerror("Erro", f"Erro ao marcar item como promocional: {str(e)}", parent=self)
-
-    def esgotado_produto_menu(self):
-        """Marcar produto como esgotado via menu de contexto"""
-        selecao = self.tree_busca.selection()
-        if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        
-        if messagebox.askyesno("Confirmar", "Deseja marcar este item como esgotado?", parent=self):
-            try:
-                database.atualizar_produto(id_prod, status_item="Esgotado")
-                messagebox.showinfo("Sucesso", "Item marcado como esgotado!", parent=self)
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_produtos"):
-                    self.master.exibir_produtos()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao marcar item como esgotado: {str(e)}", parent=self)
-
-    def restaurar_produto_menu(self):
-        """Restaurar produto via menu de contexto"""
-        selecao = self.tree_busca.selection()
-        if not selecao: return
-        id_prod = self.tree_busca.item(selecao)["values"][0]
-        
-        # Buscar status atual
-        with database.conectar() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status_item FROM produtos WHERE id=?", (id_prod,))
-            status_atual = cursor.fetchone()[0]
-        
-        # Definir status anterior baseado no atual
-        if status_atual == "Indisponível":
-            novo_status = "Disponível"
-        elif status_atual == "Esgotado":
-            novo_status = "Disponível"
-        elif status_atual == "Promocional":
-            novo_status = "Disponível"
-        else:
-            messagebox.showinfo("Info", "Não há status anterior para restaurar.", parent=self)
-            return
-        
-        if messagebox.askyesno("Confirmar", f"Restaurar item para '{novo_status}'?", parent=self):
-            try:
-                database.atualizar_produto(id_prod, status_item=novo_status)
-                messagebox.showinfo("Sucesso", "Item restaurado!", parent=self)
-                self.atualizar_tree_busca()
-                if hasattr(self.master, "exibir_produtos"):
-                    self.master.exibir_produtos()
-            except Exception as e:
-                messagebox.showerror("Erro", f"Erro ao restaurar item: {str(e)}", parent=self)
 
 
 class VisualizarProduto(tk.Toplevel):

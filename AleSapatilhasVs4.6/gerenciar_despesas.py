@@ -1,10 +1,22 @@
+"""
+gerenciar_despesas.py — Módulo financeiro de SAÍDAS (contas a pagar).
+
+Escopo:
+  - Cadastro e edição de despesas vinculadas a fornecedor (tabela clientes, tipo='Fornecedor')
+  - Parcelamento, pagamento parcial (valor_pago) e histórico na Treeview interna
+
+Não altera estoque nem vendas — responsabilidade exclusiva do financeiro.
+"""
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 from datetime import datetime
-import database 
+import database
 import ui_utils
 
+
 class JanelaGerenciarDespesas(tk.Toplevel):
+    """Formulário modal para CRUD de títulos tipo Despesa."""
     def __init__(self, master, dados_despesa=None):
         super().__init__(master)
         
@@ -28,7 +40,7 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.resizable(False, False)
         
         # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=950)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=850)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         self.fornecedor_selecionado_id = None
@@ -233,14 +245,14 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         # --- BOTÕES DE AÇÃO OPERACIONAL (Dual Mode e Hover) ---
         texto_btn = "ATUALIZAR DESPESA" if self.despesa_id else "SALVAR DESPESA"
         self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.validar_e_salvar)
-        self.btn_salvar.grid(row=20, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=6)
+        self.btn_salvar.grid(row=7, column=0, columnspan=3, pady=(10, 0), sticky="ew", ipady=4)
         
-        self.btn_deletar = tk.Button(main_frame, text="EXCLUIR REGISTRO FINANCEIRO", bg="#E74C3C", fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
+        self.btn_deletar = tk.Button(main_frame, text="EXCLUIR REGISTRO FINANCEIRO", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
         self.btn_deletar.grid(row=6, column=0, columnspan=3, pady=2, sticky="ew", ipady=4)
         self.btn_deletar.grid_remove() # Exibir apenas em edições
 
         self.btn_cancelar = tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
-        self.btn_cancelar.grid(row=7, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
+        self.btn_cancelar.grid(row=20, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
       
        # Bind Hovers
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -334,8 +346,13 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         if d: self.preencher_dados(d)
 
     def preencher_dados(self, d):
-        # Mapeamento do registro financeiro do banco de dados
         self.despesa_id = d[0]
+        self.fornecedor_selecionado_id = d[25] if len(d) > 25 and d[25] else None
+        if not self.fornecedor_selecionado_id and d[5]:
+            with database.conectar() as conn:
+                r = conn.execute("SELECT id FROM clientes WHERE tipo='Fornecedor' AND nome=? LIMIT 1", (d[5],)).fetchone()
+                if r:
+                    self.fornecedor_selecionado_id = r[0]
         self.ent_forn_nome.delete(0, tk.END); self.ent_forn_nome.insert(0, d[5] if d[5] else "")
         self.ent_desc.delete(0, tk.END); self.ent_desc.insert(0, d[6] if d[6] else "")
         
@@ -353,14 +370,20 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.cb_cat.set(d[18] if d[18] else "Outros")
         self.cb_status.set(d[19])
         
-        self.ent_parc.delete(0, tk.END); self.ent_parc.insert(0, str(d[14]))
+        self.ent_parc.delete(0, tk.END); self.ent_parc.insert(0, str(d[14] or 1))
         self.toggle_recorrencia()
         
         self.btn_salvar.config(text="⚙️ CONFIRMAR ATUALIZAÇÃO (SALVAR)", bg=self.cor_destaque)
         self.btn_deletar.grid()
         self.carregar_parcelas_historico(d[5], d[6])
 
+    def validar_e_salvar(self):
+        self.salvar_crud()
+
     def salvar_crud(self):
+        if not self.fornecedor_selecionado_id and not self.despesa_id:
+            messagebox.showwarning("Validação", "Selecione um fornecedor na lista de contatos.", parent=self)
+            return
         nome = self.ent_forn_nome.get().strip()
         desc = self.ent_desc.get().strip()
         v_base = self.ent_valor_base.get().replace(",", ".")
@@ -388,24 +411,34 @@ class JanelaGerenciarDespesas(tk.Toplevel):
 
         valor_liquido_calculado = round(val_base_f + enc_f - desc_f, 2)
 
+        st = self.cb_status.get()
+        if val_pago_f >= valor_liquido_calculado - 0.01:
+            st = 'Pago'
+            if not dat_pag:
+                dat_pag = datetime.now().strftime("%Y-%m-%d")
+        elif val_pago_f > 0:
+            st = 'Pendente'
+
         if self.despesa_id:
-            # Operação de UPDATE
             database.atualizar_despesa(
                 self.despesa_id,
-                entidade_nome=nome, descricao=desc, valor=valor_liquido_calculado, valor_base=val_base_f,
-                valor_pago=val_pago_f, encargos=enc_f, descontos=desc_f, data_lancamento=dat_lan,
-                data_vencimento=dat_ven, data_pagamento=dat_pag, forma_pagamento=self.cb_forma.get(),
-                categoria=self.cb_cat.get(), status=self.cb_status.get(), recorrencia=self.cb_recorrencia.get()
+                fornecedor_id=self.fornecedor_selecionado_id, entidade_nome=nome, descricao=desc,
+                valor=valor_liquido_calculado, valor_base=val_base_f, valor_pago=val_pago_f, encargos=enc_f,
+                descontos=desc_f, data_lancamento=dat_lan, data_vencimento=dat_ven, data_pagamento=dat_pag,
+                forma_pagamento=self.cb_forma.get(), categoria=self.cb_cat.get(), status=st,
+                recorrencia=self.cb_recorrencia.get()
             )
             messagebox.showinfo("Sucesso", "Lançamento atualizado com segurança.", parent=self)
         else:
             # Operação de INSERT
+            rec = 'Parcelar' if self.cb_recorrencia.get() == 'Parcelar' and parcelas_totais > 1 else self.cb_recorrencia.get()
             database.cadastrar_despesa(
                 fornecedor=nome, descricao=desc, categoria=self.cb_cat.get(), valor=val_base_f,
-                recorrencia=self.cb_recorrencia.get(), vencimento=dat_ven, forma_pagamento=self.cb_forma.get(),
-                status=self.cb_status.get(), parcelas=parcelas_totais, data_lancamento=dat_lan,
+                recorrencia=rec, vencimento=dat_ven, forma_pagamento=self.cb_forma.get(),
+                status=st, parcelas=parcelas_totais, data_lancamento=dat_lan,
                 data_pagamento=dat_pag, tipo_encargos='Valor Fixo', valor_encargos=enc_f,
-                tipo_descontos='Valor Fixo', valor_descontos=desc_f, valor_base=val_base_f
+                tipo_descontos='Valor Fixo', valor_descontos=desc_f, valor_base=val_base_f,
+                fornecedor_id=self.fornecedor_selecionado_id, valor_pago=val_pago_f
             )
             messagebox.showinfo("Sucesso", "Lançamentos distribuídos com sucesso.", parent=self)
 

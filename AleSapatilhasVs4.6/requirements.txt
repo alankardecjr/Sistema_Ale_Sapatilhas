@@ -1,0 +1,5 @@
+# Alê Sapatilhas ERP/PDV — dependências
+# Python 3.10+ recomendado (stdlib apenas; Tkinter incluso no instalador oficial do Windows)
+
+# Não há pacotes PyPI obrigatórios nesta versão.
+# Futuro: pytest, pillow (fotos), reportlab (PDF), openpyxl (Excel)

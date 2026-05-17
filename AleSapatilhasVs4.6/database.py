@@ -1,14 +1,42 @@
+"""
+database.py — Camada de persistência (SQLite).
+
+Responsabilidades:
+  - Schema, migrações incrementais e conexão com PRAGMA foreign_keys
+  - Regras de negócio que envolvem transação (venda + estoque + financeiro)
+  - Consultas para relatórios e listagens da interface
+
+Padrão de retorno em operações críticas: tupla (sucesso: bool, mensagem: str)
+para a UI exibir feedback sem acoplar messagebox aqui (separação de camadas).
+"""
+
 import sqlite3
+import os
 from datetime import datetime
 
-# --- Configuração do Banco de Dados ---
-DB_NAME = "AleSapatilhasVs4.4db"
+import config
+
+# --- Configuração do Banco de Dados (sempre na pasta do projeto) ---
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_NAME = os.path.join(_BASE_DIR, "AleSapatilhasVs4.6db")
 
 def conectar():
     """Estabelece a conexão com suporte a chaves estrangeiras."""
     conn = sqlite3.connect(DB_NAME)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
+
+def _migrar_schema(cursor):
+    """Aplica alterações incrementais sem perder dados existentes."""
+    cursor.execute("PRAGMA table_info(produtos)")
+    cols_prod = [row[1] for row in cursor.fetchall()]
+    if "fornecedor_id" not in cols_prod:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN fornecedor_id INTEGER REFERENCES clientes (id)")
+
+    cursor.execute("PRAGMA table_info(financeiro)")
+    cols_fin = [row[1] for row in cursor.fetchall()]
+    if "fornecedor_id" not in cols_fin:
+        cursor.execute("ALTER TABLE financeiro ADD COLUMN fornecedor_id INTEGER REFERENCES clientes (id)")
 
 def criar_tabelas():
     """Cria a estrutura completa do ERP com foco em rastreabilidade financeira."""
@@ -163,7 +191,30 @@ def criar_tabelas():
         if "foto" not in colunas_produtos:
             cursor.execute("ALTER TABLE produtos ADD COLUMN foto TEXT DEFAULT ''")
 
+        _migrar_schema(cursor)
         conn.commit()
+
+def obter_nome_contato(contato_id):
+    if not contato_id:
+        return None
+    with conectar() as conn:
+        row = conn.execute("SELECT nome FROM clientes WHERE id = ?", (contato_id,)).fetchone()
+        return row[0] if row else None
+
+def listar_contatos(tipo=None, termo=""):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        sql = "SELECT id, tipo, nome, telefone, status_cliente FROM clientes WHERE 1=1"
+        params = []
+        if tipo:
+            sql += " AND tipo = ?"
+            params.append(tipo)
+        if termo:
+            sql += " AND (nome LIKE ? OR telefone LIKE ? OR cpf LIKE ?)"
+            params.extend([f"%{termo}%", f"%{termo}%", f"%{termo}%"])
+        sql += " ORDER BY nome ASC"
+        cursor.execute(sql, params)
+        return cursor.fetchall()
 
 # --- Funções Auxiliares de Cálculo de Data ---
 def adicionar_meses(data_obj, meses):
@@ -180,7 +231,9 @@ def calcular_valor_com_ajustes(valor_base, t_enc, v_enc, t_desc, v_desc):
 
 
 # --- Gerenciamento Comercial e de Estoque ---
-def cadastrar_produto(sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto=""):
+def cadastrar_produto(sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto="", fornecedor_id=None):
+    if fornecedor_id and not fornecedor:
+        fornecedor = obter_nome_contato(fornecedor_id) or ""
     try:
         with conectar() as conn:
             cursor = conn.cursor()
@@ -206,9 +259,9 @@ def cadastrar_produto(sku, tipo, produto, cor, tamanho, precocusto, precovenda, 
                 sku = novo_sku
 
             cursor.execute("""
-                INSERT INTO produtos (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto))
+                INSERT INTO produtos (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto, fornecedor_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (sku, tipo, produto, cor, tamanho, precocusto, precovenda, quantidade, categoria, material, fornecedor, foto, fornecedor_id))
             conn.commit()
             return True
     except sqlite3.IntegrityError:
@@ -231,15 +284,17 @@ def atualizar_produto(produto_id, **kwargs):
         conn.commit()
 
 # --- Funções de Clientes ---
-def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, city, cep, obs, limite=0):
-    # --- Registra um novo cliente no sistema validando a unicidade do cpf e definindo o limite inicial de crédito ---
+def cadastrar_cliente(nome, cpf, tel, email, niver, tam, endereco, bairro, city, cep, obs, limite=0, tipo='Cliente'):
+    # --- Registra contato unificado (Cliente ou Fornecedor) ---
+    if tipo not in ('Cliente', 'Fornecedor'):
+        tipo = 'Cliente'
     try:
         with conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO clientes (tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco_completo, bairro, cidade, cep, observacao, limite_credito)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                ('Cliente', nome, cpf, tel, email, niver, tam, endereco, bairro, city, cep, obs, limite))
+                (tipo, nome, cpf, tel, email, niver, tam, endereco, bairro, city, cep, obs, limite))
             return cursor.lastrowid
     except sqlite3.IntegrityError:
         return False
@@ -287,6 +342,14 @@ def realizar_venda_crediario(cliente_id, lista_produtos, parcelas, desc_venda=0)
         conn.commit()
 
 def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, desconto_total=0):
+    """
+    Transação atômica de venda (padrão ACID simplificado):
+      1. Valida estoque
+      2. Grava venda + itens_venda
+      3. Baixa estoque
+      4. Gera parcelas em financeiro (Receita)
+    Em erro: rollback desfaz tudo.
+    """
     with conectar() as conn:
         cursor = conn.cursor()
         try:
@@ -317,10 +380,10 @@ def realizar_venda_segura(cliente_id, lista_produtos, forma_pgto, parcelas=1, de
                 
                 cursor.execute("""
                     INSERT INTO financeiro (
-                        tipo, venda_id, id_agrupador, entidade_nome, descricao, valor, valor_base, 
-                        parcelas_atual, total_parcelas, data_vencimento, categoria, recorrencia
-                    ) VALUES ('Receita', ?, ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, ?, 'Venda', 'Parcelado')
-                """, (venda_id, venda_id, cliente_id, f"Venda #{venda_id} - Parcela {i+1}/{parcelas}", 
+                        tipo, venda_id, cliente_id, id_agrupador, entidade_nome, descricao, valor, valor_base, 
+                        parcelas_atual, total_parcelas, data_vencimento, categoria, recorrencia, status
+                    ) VALUES ('Receita', ?, ?, ?, (SELECT nome FROM clientes WHERE id=?), ?, ?, ?, ?, ?, ?, 'Venda', 'Parcelado', 'Pendente')
+                """, (venda_id, cliente_id, venda_id, cliente_id, f"Venda #{venda_id} - Parcela {i+1}/{parcelas}", 
                       valor_parcela, valor_parcela, i+1, parcelas, vencimento))
 
             conn.commit()
@@ -379,6 +442,138 @@ def cancelar_venda(venda_id, motivo="Cancelamento solicitado"):
             conn.rollback()
             return False, f"Erro ao cancelar venda: {str(e)}"
 
+def obter_itens_venda(venda_id):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT iv.produto_id, p.produto, p.cor, p.tamanho, iv.quantidade, iv.preco_unitario, iv.subtotal
+            FROM itens_venda iv
+            JOIN produtos p ON iv.produto_id = p.id
+            WHERE iv.venda_id = ?
+        """, (venda_id,))
+        return cursor.fetchall()
+
+def obter_venda_por_id(venda_id):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT v.id, v.cliente_id, c.nome, c.telefone, c.cpf, v.valor_bruto, v.desconto, v.valor_total,
+                   v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.status_venda
+            FROM vendas v
+            JOIN clientes c ON v.cliente_id = c.id
+            WHERE v.id = ?
+        """, (venda_id,))
+        return cursor.fetchone()
+
+def atualizar_venda_comercial(venda_id, cliente_id, lista_produtos, desconto_total=0):
+    """Atualiza itens e totais da venda; estoque é recalculado. Financeiro pago exige ajuste manual."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT status_venda FROM vendas WHERE id = ?", (venda_id,))
+            row = cursor.fetchone()
+            if not row:
+                return False, "Venda não encontrada."
+            if row[0] == 'Cancelada':
+                return False, "Venda cancelada não pode ser editada."
+
+            cursor.execute("SELECT COUNT(*) FROM financeiro WHERE venda_id = ? AND status = 'Pago'", (venda_id,))
+            if cursor.fetchone()[0] > 0:
+                return False, "Há parcelas já recebidas. Ajuste pagamentos em Gerenciar Receitas antes de alterar itens."
+
+            cursor.execute("SELECT produto_id, quantidade FROM itens_venda WHERE venda_id = ?", (venda_id,))
+            for produto_id, qtd in cursor.fetchall():
+                cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE id = ?", (qtd, produto_id))
+            cursor.execute("DELETE FROM itens_venda WHERE venda_id = ?", (venda_id,))
+
+            for item in lista_produtos:
+                cursor.execute("SELECT quantidade, produto FROM produtos WHERE id = ?", (item['id'],))
+                res = cursor.fetchone()
+                if not res or res[0] < item['qtd']:
+                    conn.rollback()
+                    return False, f"Estoque insuficiente: {res[1] if res else 'Produto não encontrado'}"
+                cursor.execute("UPDATE produtos SET quantidade = quantidade - ? WHERE id = ?", (item['qtd'], item['id']))
+                cursor.execute("""
+                    INSERT INTO itens_venda (venda_id, produto_id, quantidade, preco_unitario, subtotal)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (venda_id, item['id'], item['qtd'], item['preco'], item['qtd'] * item['preco']))
+
+            total_bruto = sum(p['qtd'] * p['preco'] for p in lista_produtos)
+            total_liquido = round(total_bruto - desconto_total, 2)
+            cursor.execute("SELECT forma_pagamento, qtd_parcelas FROM vendas WHERE id = ?", (venda_id,))
+            fp, qp = cursor.fetchone()
+            cursor.execute("""
+                UPDATE vendas SET cliente_id = ?, valor_bruto = ?, desconto = ?, valor_total = ?
+                WHERE id = ?
+            """, (cliente_id, total_bruto, desconto_total, total_liquido, venda_id))
+            parcelas = qp or 1
+            cursor.execute("DELETE FROM financeiro WHERE venda_id = ? AND status != 'Pago'", (venda_id,))
+            valor_parcela = round(total_liquido / parcelas, 2)
+            cursor.execute("SELECT nome FROM clientes WHERE id = ?", (cliente_id,))
+            nome_cli = cursor.fetchone()[0]
+            for i in range(parcelas):
+                if i == parcelas - 1:
+                    valor_parcela = round(total_liquido - (valor_parcela * (parcelas - 1)), 2)
+                vencimento = adicionar_meses(datetime.now(), i).strftime("%Y-%m-%d")
+                cursor.execute("""
+                    INSERT INTO financeiro (
+                        tipo, venda_id, cliente_id, id_agrupador, entidade_nome, descricao, valor, valor_base,
+                        parcelas_atual, total_parcelas, data_vencimento, categoria, recorrencia, status
+                    ) VALUES ('Receita', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Venda', 'Parcelado', 'Pendente')
+                """, (venda_id, cliente_id, venda_id, nome_cli, f"Venda #{venda_id} - Parcela {i+1}/{parcelas}",
+                      valor_parcela, valor_parcela, i + 1, parcelas, vencimento))
+
+            conn.commit()
+            return True, "Venda atualizada com sucesso."
+        except Exception as e:
+            conn.rollback()
+            return False, f"Erro ao atualizar venda: {str(e)}"
+
+def obter_financeiro_por_id(financeiro_id):
+    with conectar() as conn:
+        return conn.execute("SELECT * FROM financeiro WHERE id = ?", (financeiro_id,)).fetchone()
+
+def listar_parcelas_venda(venda_id):
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, parcelas_atual, total_parcelas, data_vencimento, data_pagamento, valor, valor_pago, status
+            FROM financeiro WHERE venda_id = ? AND tipo = 'Receita' ORDER BY parcelas_atual ASC
+        """, (venda_id,))
+        return cursor.fetchall()
+
+def registrar_pagamento_financeiro(financeiro_id, valor_pago, forma_pgto, data_pagamento=None, status=None):
+    """
+    Baixa total ou parcial de título (receita ou despesa).
+    valor_pago é SOMADO ao já registrado — suporta múltiplos recebimentos parciais.
+    """
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    data_pagamento = data_pagamento or hoje
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT valor, valor_pago, tipo FROM financeiro WHERE id = ?", (financeiro_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False, "Lançamento não encontrado."
+        valor_titulo, valor_ja_pago, tipo = row
+        valor_pago = round(float(valor_pago), 2)
+        total_pago = round((valor_ja_pago or 0) + valor_pago, 2)
+        if total_pago > valor_titulo + 0.01:
+            return False, "Valor pago excede o saldo do título."
+        if status is None:
+            if total_pago >= valor_titulo - 0.01:
+                status = 'Pago'
+            elif total_pago > 0:
+                status = 'Pendente'
+            else:
+                status = 'Pendente'
+        cursor.execute("""
+            UPDATE financeiro SET valor_pago = ?, status = ?, data_pagamento = ?, forma_pagamento = ?
+            WHERE id = ?
+        """, (total_pago, status, data_pagamento if total_pago > 0 else None, forma_pgto, financeiro_id))
+        conn.commit()
+        return True, "Pagamento registrado."
+
 # --- Financeiro e relatórios ---
 def obter_todos_registros_financeiros():
     with conectar() as conn:
@@ -387,17 +582,19 @@ def obter_todos_registros_financeiros():
         return cursor.fetchall()
 
 def quitar_titulo_financeiro(financeiro_id, forma_pgto):
-    # --- Registra o pagamento de uma conta a pagar ou receber alterando seu status e salvando a data da liquidação ---
-    hoje = datetime.now().strftime("%Y-%m-%d")
     with conectar() as conn:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE financeiro SET status = 'Pago', data_pagamento = ?, forma_pagamento = ? WHERE id = ?", 
-                       (hoje, forma_pgto, financeiro_id))
+        row = conn.execute("SELECT valor, valor_pago FROM financeiro WHERE id = ?", (financeiro_id,)).fetchone()
+        if not row:
+            return False, "Lançamento não encontrado."
+        saldo = round(row[0] - (row[1] or 0), 2)
+        if saldo <= 0:
+            saldo = row[0]
+    return registrar_pagamento_financeiro(financeiro_id, saldo, forma_pgto)
 
 # --- Insere uma nova despesa no financeiro com recorrência e/ou parcelamento mensal ---
 def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, vencimento, forma_pagamento, status, parcelas=1,
                       data_lancamento=None, data_pagamento=None, tipo_encargos='Valor Fixo', valor_encargos=0.0,
-                      tipo_descontos='Valor Fixo', valor_descontos=0.0, valor_base=None):
+                      tipo_descontos='Valor Fixo', valor_descontos=0.0, valor_base=None, fornecedor_id=None, valor_pago=0.0):
 
 # --- Cria lançamentos de saída financeira no sistema, permitindo o rateio de valores em várias parcelas mensais ---
     def normalizar_data(data_str):
@@ -417,18 +614,30 @@ def cadastrar_despesa(fornecedor, descricao, categoria, valor, recorrencia, venc
     data_lancamento = datetime.now().strftime('%Y-%m-%d') if data_lancamento is None else normalizar_data(data_lancamento).strftime('%Y-%m-%d')
     if data_pagamento: data_pagamento = normalizar_data(data_pagamento).strftime('%Y-%m-%d')
 
+    if fornecedor_id and not fornecedor:
+        fornecedor = obter_nome_contato(fornecedor_id) or fornecedor
+    vp_inicial = round(float(valor_pago or 0), 2) if status == 'Pago' else 0.0
+
     with conectar() as conn:
         cursor = conn.cursor()
+        id_agrupador = None
         for i in range(parcelas):
             data_venc = adicionar_meses(data_inicial, i).strftime("%Y-%m-%d")
+            vp = vp_inicial if i == 0 else 0.0
+            st = status if i == 0 else 'Pendente'
+            dp = data_pagamento if i == 0 and vp > 0 else None
             cursor.execute("""
-                INSERT INTO financeiro (tipo, entidade_nome, descricao, valor, valor_base, parcelas_atual, total_parcelas,
-                                       data_vencimento, data_pagamento, forma_pagamento, categoria, status, recorrencia,
-                                       data_lancamento, tipo_encargos, valor_encargos, tipo_descontos, valor_descontos)
-                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (fornecedor, descricao, valor_parc, valor_base, i+1, parcelas, data_venc, data_pagamento,
-                  forma_pagamento, categoria, status, recorrencia, data_lancamento, tipo_encargos,
-                  valor_encargos, tipo_descontos, valor_descontos))
+                INSERT INTO financeiro (tipo, fornecedor_id, entidade_nome, descricao, valor, valor_base, valor_pago,
+                                       parcelas_atual, total_parcelas, data_vencimento, data_pagamento, forma_pagamento,
+                                       categoria, status, recorrencia, data_lancamento, tipo_encargos, valor_encargos,
+                                       tipo_descontos, valor_descontos, id_agrupador)
+                VALUES ('Despesa', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (fornecedor_id, fornecedor, descricao if parcelas == 1 else f"{descricao} ({i+1}/{parcelas})",
+                  valor_parc, valor_base, vp, i + 1, parcelas, data_venc, dp, forma_pagamento, categoria, st,
+                  recorrencia, data_lancamento, tipo_encargos, valor_encargos, tipo_descontos, valor_descontos, id_agrupador))
+            if id_agrupador is None:
+                id_agrupador = cursor.lastrowid
+                cursor.execute("UPDATE financeiro SET id_agrupador = ? WHERE id = ?", (id_agrupador, id_agrupador))
         conn.commit()
         return True, "Despesa cadastrada com sucesso!"
 def listar_despesas():
@@ -437,7 +646,7 @@ def listar_despesas():
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
-                   forma_pagamento, status, parcela_atual, total_parcelas
+                   forma_pagamento, status, parcelas_atual, total_parcelas
             FROM financeiro 
             WHERE tipo = 'Despesa'
             ORDER BY data_vencimento DESC
@@ -468,16 +677,12 @@ def deletar_despesa(despesa_id):
             if not resultado:
                 return False, "Despesa não encontrada."
             
-            # Deleta todas as parcelas da despesa
-            cursor.execute("""
-                DELETE FROM financeiro 
-                WHERE tipo = 'Despesa' AND id IN (
-                    SELECT id FROM financeiro 
-                    WHERE tipo = 'Despesa' AND descricao = (
-                        SELECT descricao FROM financeiro WHERE id = ?
-                    ) AND parcela_atual <= (SELECT total_parcelas FROM financeiro WHERE id = ?)
-                )
-            """, (despesa_id, despesa_id))
+            cursor.execute("SELECT id_agrupador FROM financeiro WHERE id = ? AND tipo = 'Despesa'", (despesa_id,))
+            agr = cursor.fetchone()
+            if agr and agr[0]:
+                cursor.execute("DELETE FROM financeiro WHERE tipo = 'Despesa' AND id_agrupador = ?", (agr[0],))
+            else:
+                cursor.execute("DELETE FROM financeiro WHERE id = ? AND tipo = 'Despesa'", (despesa_id,))
             
             conn.commit()
             return True, "Despesa deletada com sucesso!"
@@ -490,7 +695,7 @@ def buscar_despesa_por_termo(termo):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
-                   forma_pagamento, status, parcela_atual, total_parcelas
+                   forma_pagamento, status, parcelas_atual, total_parcelas
             FROM financeiro 
             WHERE tipo = 'Despesa' AND (
                 entidade_nome LIKE ? OR descricao LIKE ?
@@ -505,21 +710,75 @@ def obter_despesa_por_id(despesa_id):
         cursor = conn.cursor()
         cursor.execute("""
             SELECT id, entidade_nome, descricao, valor, categoria, data_vencimento, 
-                   forma_pagamento, status, parcela_atual, total_parcelas
+                   forma_pagamento, status, parcelas_atual, total_parcelas
             FROM financeiro 
             WHERE id = ? AND tipo = 'Despesa'
         """, (despesa_id,))
         return cursor.fetchone()
 
-def dashboard_resumo():
-    # --- Gera um panorama rápido contendo alertas de estoque baixo e o montante total de receitas ainda não recebidas ---
+def exibir_produtos_com_fornecedor():
     with conectar() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT produto, quantidade FROM produtos WHERE quantidade < 3 AND status_item != 'Indisponível'")
+        cursor.execute("""
+            SELECT p.id, p.sku, p.tipo, p.produto, p.cor, p.tamanho, p.precocusto, p.precovenda, p.quantidade,
+                   p.categoria, p.material, COALESCE(c.nome, p.fornecedor, ''), p.status_item, p.foto
+            FROM produtos p
+            LEFT JOIN clientes c ON p.fornecedor_id = c.id
+            ORDER BY p.produto ASC
+        """)
+        return cursor.fetchall()
+
+def _saldo_titulo(valor, valor_pago):
+    """Saldo em aberto de um título (valor nominal menos amortizações)."""
+    return round(float(valor or 0) - float(valor_pago or 0), 2)
+
+
+def listar_titulos_abertos(tipo, limite=200):
+    """
+    Contas a receber (Receita) ou a pagar (Despesa) com saldo pendente.
+    Ordenação por vencimento — padrão de relatórios financeiros do varejo.
+    """
+    with conectar() as conn:
+        cursor = conn.cursor()
+        placeholders = ",".join("?" * len(config.STATUS_FINANCEIRO_ABERTO))
+        cursor.execute(f"""
+            SELECT id, entidade_nome, descricao, valor, valor_pago, data_vencimento, status,
+                   (valor - COALESCE(valor_pago, 0)) AS saldo
+            FROM financeiro
+            WHERE tipo = ? AND status IN ({placeholders})
+            ORDER BY date(data_vencimento) ASC
+            LIMIT ?
+        """, (tipo, *config.STATUS_FINANCEIRO_ABERTO, limite))
+        return cursor.fetchall()
+
+
+def dashboard_resumo():
+    """Indicadores rápidos para o painel inicial (KPIs operacionais)."""
+    with conectar() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT produto, quantidade FROM produtos WHERE quantidade < ? AND status_item != 'Indisponível'",
+            (config.LIMITE_ESTOQUE_ALERTA,),
+        )
         alertas = cursor.fetchall()
-        cursor.execute("SELECT SUM(valor) FROM financeiro WHERE tipo = 'Receita' AND status = 'Pendente'")
-        res = cursor.fetchone()[0]
-        return {"alertas_estoque": alertas, "total_a_receber": res if res else 0.0}
+        cursor.execute("""
+            SELECT COALESCE(SUM(valor - COALESCE(valor_pago, 0)), 0)
+            FROM financeiro WHERE tipo = ? AND status IN ('Pendente', 'Atrasado')
+        """, (config.TIPO_RECEITA,))
+        a_receber = cursor.fetchone()[0]
+        cursor.execute("""
+            SELECT COALESCE(SUM(valor - COALESCE(valor_pago, 0)), 0)
+            FROM financeiro WHERE tipo = ? AND status IN ('Pendente', 'Atrasado')
+        """, (config.TIPO_DESPESA,))
+        a_pagar = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM vendas WHERE status_venda = ?", (config.STATUS_VENDA_FINALIZADA,))
+        vendas_ok = cursor.fetchone()[0]
+        return {
+            "alertas_estoque": alertas,
+            "total_a_receber": float(a_receber or 0),
+            "total_a_pagar": float(a_pagar or 0),
+            "vendas_finalizadas": vendas_ok,
+        }
 
 def relatorio_vendas_geral():
     # --- Realiza um join entre vendas e clientes para gerar um extrato histórico de todas as transações realizadas ---
@@ -533,7 +792,7 @@ def relatorio_vendas_geral():
         """)
         return cursor.fetchall()
 def fluxo_caixa_mensal(mes, ano):
-    """Consolida as parcelas nas datas específicas para visualização no fluxo de caixa[cite: 1]."""
+    """Consolida entradas e saídas do período para o fluxo de caixa."""
     with conectar() as conn:
         cursor = conn.cursor()
         filtro = f"{ano}-{str(mes).zfill(2)}%"
@@ -549,8 +808,25 @@ def fluxo_caixa_mensal(mes, ano):
         """, (filtro, filtro))
         return cursor.fetchone()
 
+def lancar_despesa(descricao, valor, categoria, vencimento, parcelas=1, fornecedor="Estoque"):
+    """Lançamento rápido de despesa (ex.: reposição de estoque)."""
+    hoje = datetime.now().strftime("%Y-%m-%d")
+    if isinstance(vencimento, str) and "/" in vencimento:
+        for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+            try:
+                vencimento = datetime.strptime(vencimento, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+    else:
+        vencimento = hoje
+    return cadastrar_despesa(
+        fornecedor, descricao, categoria, valor, 'Não Recorrente', vencimento,
+        'Dinheiro', 'Pago', parcelas=parcelas, data_pagamento=hoje, valor_pago=valor
+    )
+
 def listar_itens():
-    """Recupera produtos para o checkout[cite: 1]."""
+    """Recupera produtos disponíveis para o checkout."""
     with conectar() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT id, produto, cor, tamanho, precocusto, precovenda, quantidade FROM produtos WHERE status_item != 'Indisponível'")

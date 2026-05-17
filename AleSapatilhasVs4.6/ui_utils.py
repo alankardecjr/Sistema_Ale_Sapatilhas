@@ -1,6 +1,13 @@
 """
-Módulo de utilitários para padronização de UI em todas as janelas do sistema.
-Centraliza paleta de cores, cálculo de dimensões e estilos.
+ui_utils.py — Camada de apresentação compartilhada (Design System leve).
+
+Por que centralizar cores e estilos?
+  - Consistência visual entre dezenas de telas Tkinter
+  - Alteração de tema em um único arquivo
+  - Separação entre "como aparece" (UI) e "o que faz" (database)
+
+STATUS_MENU_*: mapeiam rótulos amigáveis do menu de contexto para valores
+gravados no SQLite (constraints CHECK exigem texto exato).
 """
 
 import tkinter as tk
@@ -20,7 +27,7 @@ PALETA = {
     "cor_hover_field": "#484AD6"
 }
 
-def calcular_dimensoes_janela(root, largura_desejada=600, altura_desejada=800, maximizar=False):
+def calcular_dimensoes_janela(root, largura_desejada=700, altura_desejada=850, maximizar=False):
     """
     Calcula e define as dimensões da janela respeitando:
     - Tamanho do monitor
@@ -29,8 +36,8 @@ def calcular_dimensoes_janela(root, largura_desejada=600, altura_desejada=800, m
     
     Args:
         root: Janela Tkinter
-        largura_desejada: Largura desejada (padrão 600)
-        altura_desejada: Altura desejada (padrão 800)
+        largura_desejada: Largura desejada (padrão 700)
+        altura_desejada: Altura desejada (padrão 850)
         maximizar: Se True, maximiza; se False, usa dimensões padrão
     """
     # Atualiza para capturar dimensões corretas
@@ -58,6 +65,29 @@ def calcular_dimensoes_janela(root, largura_desejada=600, altura_desejada=800, m
 def get_paleta():
     """Retorna a paleta de cores padronizada"""
     return PALETA.copy()
+
+# Rótulos do menu de contexto → valores aceitos no banco (CHECK constraints)
+STATUS_MENU_CLIENTE = {
+    "✓ Ativo": "Ativo", "★ VIP": "Vip", "⛔ Bloqueado": "Bloqueado", "✗ Inativo": "Inativo",
+}
+STATUS_MENU_PRODUTO = {
+    "✓ Disponível": "Disponível", "✗ Indisponível": "Indisponível", "★ Promocional": "Promocional",
+}
+STATUS_MENU_FINANCEIRO = {
+    "◎ Pendente": "Pendente", "✓ Pago": "Pago", "⚠ Atrasado": "Atrasado", "✗ Cancelado": "Cancelado",
+}
+STATUS_MENU_VENDA = {
+    "✓ Finalizada": "Finalizada", "⏳ Pendente": "Pendente", "✗ Cancelada": "Cancelada",
+}
+
+def normalizar_status_menu(rotulo, mapa):
+    """Converte rótulo do menu para valor persistível."""
+    if rotulo in mapa:
+        return mapa[rotulo]
+    for k, v in mapa.items():
+        if v == rotulo or rotulo.endswith(v):
+            return v
+    return rotulo
 
 def criar_style_padrao(root):
     """Configura estilos padrão para ttk.Combobox e ttk.Treeview"""

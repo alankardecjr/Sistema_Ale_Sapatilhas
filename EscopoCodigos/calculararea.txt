@@ -1,0 +1,48 @@
+def calcular_dimensoes_janela(root, largura_desejada=700, altura_desejada=850, maximizar=False):
+    """
+    Calcula e define as dimensões da janela respeitando a barra de tarefas
+    e centralizando corretamente se não estiver maximizada.
+    """
+    # Força o Tkinter a processar eventos pendentes para obter dados reais da tela
+    root.update_idletasks()
+    
+    if maximizar:
+        # Tenta a maximização nativa que já respeita a barra de tarefas do SO
+        try:
+            # Funciona no Windows e na maioria dos gerenciadores Linux
+            root.state('zoomed')
+        except Exception:
+            # Fallback para macOS ou sistemas que não suportam 'zoomed'
+            largura_tela = root.winfo_screenwidth()
+            # Pega a altura máxima utilizável (geralmente ignora barras no Mac/Linux se usar wm_maxsize)
+            altura_max = root.winfo_maxsize()[1]
+            root.geometry(f"{largura_tela}x{altura_max}+0+0")
+    else:
+        # Retorna ao estado normal caso estivesse maximizada antes
+        root.state('normal')
+        
+        # Obtém o tamanho total da tela
+        largura_tela = root.winfo_screenwidth()
+        altura_tela = root.winfo_screenheight()
+        
+        # Descobre a altura útil real (máxima permitida para janelas comuns pelo SO)
+        # O wm_maxsize devolve (largura_max, altura_max) respeitando as barras do sistema
+        _, altura_util = root.winfo_maxsize()
+        
+        # Se a altura útil for igual à altura total (o SO não informou a barra),
+        # aplicamos um desconto preventivo de segurança (margem padrão de ~60px)
+        if altura_util == altura_tela:
+            altura_util -= 60
+
+        # Define as dimensões finais garantindo que caiba no monitor do usuário
+        largura_final = min(largura_desejada, largura_tela - 40)
+        altura_final = min(altura_desejada, altura_util - 40)
+        
+        # Centraliza a janela com base na área útil (evita que a janela fique sob a barra)
+        x = (largura_tela - largura_final) // 2
+        y = (altura_util - altura_final) // 2
+        
+        # Garante que y nunca seja negativo (o topo sumiria se a tela fosse muito pequena)
+        y = max(y, 0)
+        
+        root.geometry(f"{largura_final}x{altura_final}+{x}+{y}")
