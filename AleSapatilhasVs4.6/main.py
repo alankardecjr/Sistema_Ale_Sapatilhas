@@ -97,15 +97,15 @@ class SistemaAleSapatilhas:
         botoes = [
             ("", None, None),
             ("➕ GERAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
-            ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),
+            ("📑 GERENCIAR VENDAS", self.exibir_vendas, "vendas"),
             #("💰 GERENCIAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
-            ("📥 CONTAS A RECEBER", self.exibir_contas_a_receber, "contas_receber"),
-            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),
-            ("📤 CONTAS A PAGAR", self.exibir_contas_a_pagar, "contas_pagar"),
             ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
-            ("👥 LISTAR CONTATOS", self.exibir_clientes, "clientes"),
+            ("👥 GERENCIAR CONTATOS", self.exibir_clientes, "clientes"),
+            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),
             ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
-            ("👠 LISTAR PRODUTOS", self.exibir_produtos, "produtos"),
+            ("👠 GERENCIAR PRODUTOS", self.exibir_produtos, "produtos"),
+            ("📥 CONTAS A RECEBER", self.exibir_contas_a_receber, "contas_receber"),
+            ("📤 CONTAS A PAGAR", self.exibir_contas_a_pagar, "contas_pagar"),
             ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
@@ -659,12 +659,92 @@ class SistemaAleSapatilhas:
     # --- Função de visualização detalhada para vendas, que abre uma janela mostrando um resumo completo da venda selecionada, incluindo itens, cliente, forma de pagamento e status ---
     def visualizar_venda(self):
         item = self.tree.selection()
-        if not item: return
-        id_banco = item[0]
+        if not item:
+            return
+        id_venda = item[0]
 
-        from cadastro_vendas import VisualizarRecibo
-        VisualizarRecibo(self.root, id_venda=item[0])
+        # --- Paleta de cores ---
+        paleta = ui_utils.get_paleta()
+        self.bg_fundo = paleta["bg_fundo"]
+        self.bg_card = paleta["bg_card"]
+        self.cor_texto = paleta["cor_texto"]
+        self.cor_destaque = paleta["cor_destaque"]
+        
+        self.title("Recibo de Venda")
+        self.configure(bg=self.bg_fundo)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=560, altura_desejada=620)
+        
+        # Buscar dados da venda
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT v.id, c.nome, c.cpf, c.telefone, c.email, c.aniversario, c.tamanho_calcado, 
+                       c.endereco_completo, c.bairro, c.cidade, c.cep, c.observacao, c.limite_credito, c.status_cliente,
+                       v.valor_bruto, v.desconto, v.valor_total, v.forma_pagamento, v.qtd_parcelas, v.data_venda, v.status_venda, v.vendedor,
+                       GROUP_CONCAT(p.produto || ' (' || vi.quantidade || 'x R$ ' || vi.preco_unitario || ' = R$ ' || vi.subtotal || ')', '\n') as produtos
+                FROM vendas v
+                JOIN clientes c ON v.cliente_id = c.id
+                JOIN itens_venda vi ON v.id = vi.venda_id
+                JOIN produtos p ON vi.produto_id = p.id
+                WHERE v.id = ?
+                GROUP BY v.id
+            """, (id_venda,))
+            dados = cursor.fetchone()
+        
+        if not dados:
+            messagebox.showerror("Erro", "Venda não encontrada!", parent=self)
+            self.destroy()
+            return
+        
+        # Criar interface
+        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
+        main_frame.pack(fill="both", expand=True)
+        
+        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, 
+                 fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        
+        # Informações da venda e cliente
+        info_text = f"""
+=== DADOS DA VENDA ===
+ID da Venda: {dados[0]}
+Data: {dados[18]}
+Status: {dados[20]}
+Vendedor: {dados[21] or 'N/A'}
 
+=== DADOS DO CLIENTE ===
+Nome: {dados[1]}
+CPF: {dados[2]}
+Telefone: {dados[3]}
+Email: {dados[4] or 'N/A'}
+Aniversário: {dados[5] or 'N/A'}
+Tamanho Calçado: {dados[6] or 'N/A'}
+Endereço: {dados[7] or 'N/A'}
+Bairro: {dados[8] or 'N/A'}
+Cidade: {dados[9] or 'N/A'}
+CEP: {dados[10] or 'N/A'}
+Observação: {dados[11] or 'N/A'}
+Limite de Crédito: R$ {dados[12]:.2f}
+Status Cliente: {dados[13]}
+
+=== DADOS FINANCEIROS ===
+Valor Bruto: R$ {dados[14]:.2f}
+Desconto: R$ {dados[15]:.2f}
+Valor Total: R$ {dados[16]:.2f}
+Forma de Pagamento: {dados[17]}
+Parcelas: {dados[19]}x
+
+=== PRODUTOS VENDIDOS ===
+{dados[22]}
+        """
+        
+        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
+                           font=("Courier New", 9), justify="left", relief="solid", borderwidth=1)
+        lbl_info.pack(fill="both", expand=True, pady=(0, 20))
+        
+        # Botão fechar
+        tk.Button(main_frame, text="FECHAR", bg=self.cor_destaque, fg="white",
+                 font=("Segoe UI", 10, "bold"), command=self.destroy).pack()
+        
     def visualizar_cliente(self):
         item = self.tree.selection()
         if not item: return

@@ -40,7 +40,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
         self._manter_em_primeiro_plano()
         
         # --- Aplicar dimensões padrão (600px largura, altura ajustada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=850)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=850)
 
         self.produto_id = dados_produto[0] if dados_produto else None
         self.fornecedor_id = None

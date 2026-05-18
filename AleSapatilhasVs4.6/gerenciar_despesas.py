@@ -40,7 +40,7 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.resizable(False, False)
         
         # --- Aplicar dimensões padrão (600px largura, altura aumentada) ---
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=850)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=850)
         
         self.despesa_id = dados_despesa[0] if dados_despesa else None
         self.fornecedor_selecionado_id = None
@@ -454,7 +454,6 @@ class JanelaGerenciarDespesas(tk.Toplevel):
                 self.destroy()
             else:
                 messagebox.showerror("Erro", msg, parent=self)
-
 
 if __name__ == "__main__":
     root = tk.Tk()

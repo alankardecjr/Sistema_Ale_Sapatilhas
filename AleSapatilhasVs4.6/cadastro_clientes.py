@@ -41,7 +41,7 @@ class JanelaCadastroClientes(tk.Toplevel):
 
         self._manter_em_primeiro_plano()
         
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=700, altura_desejada=750)
+        ui_utils.calcular_dimensoes_janela(self, largura_desejada=650, altura_desejada=850)
 
         self.cliente_id = dados_cliente[0] if dados_cliente else None
         self.texto_btn = "ATUALIZAR CADASTRO" if self.cliente_id else "SALVAR CADASTRO"
