@@ -120,10 +120,10 @@ class JanelaCadastroProdutos(tk.Toplevel):
             return combo
 
         tk.Label(main_frame, text="Ficha Cadastral do Produto", bg=self.bg_fundo, 
-                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 15))
+                 fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         tk.Label(main_frame, text="🔍 BUSCA RÁPIDA", bg=self.bg_fundo, 
-                 fg=self.cor_destaque, font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(5, 0))
+                 fg=self.cor_destaque, font=("Segoe UI", 10, "bold")).grid(row=1, column=0, sticky="w", pady=(3, 0))
         
         self.ent_busca_interna = tk.Entry(main_frame, font=("Segoe UI", 10), bg=self.bg_card, relief="flat",
                                           highlightbackground=self.cor_borda, highlightthickness=1)
@@ -154,7 +154,7 @@ class JanelaCadastroProdutos(tk.Toplevel):
                                   relief="flat", highlightbackground=self.cor_borda, highlightthickness=1)
         self.ent_venda.grid(row=10, column=1, sticky="ew", ipady=3)
 
-        tk.Label(main_frame, text="FORNECEDOR (CADASTRO UNIFICADO)*", bg=self.bg_fundo, fg=self.cor_lbl,
+        tk.Label(main_frame, text="FORNECEDOR", bg=self.bg_fundo, fg=self.cor_lbl,
                  font=("Segoe UI", 8, "bold")).grid(row=11, column=0, columnspan=2, sticky="w", pady=(3, 0))
 
         # --- Campo Data do Lançamento ---

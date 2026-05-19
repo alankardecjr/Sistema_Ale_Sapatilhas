@@ -97,15 +97,15 @@ class SistemaAleSapatilhas:
         botoes = [
             ("➕ GERAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
             ("📑 GERENCIAR VENDAS", self.exibir_vendas, "vendas"),
-            #("💰 GERENCIAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
-            ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
+            ("💰 GERENCIAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
             ("👥 GERENCIAR CONTATOS", self.exibir_clientes, "clientes"),
-            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),
-            ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
             ("👠 GERENCIAR PRODUTOS", self.exibir_produtos, "produtos"),
+            ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
+            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),           
+            ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
+            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📥 CONTAS A RECEBER", self.exibir_contas_a_receber, "contas_receber"),
             ("📤 CONTAS A PAGAR", self.exibir_contas_a_pagar, "contas_pagar"),
-            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
             ("", None, None),
@@ -211,10 +211,18 @@ class SistemaAleSapatilhas:
         btn_filtrar.bind("<Leave>", lambda e: btn_filtrar.config(bg=self.cor_btn_menu))
 
         # --- Botão 2: Limpar ---
-        btn_limpar = tk.Button(search_frame, text="❌ LIMPAR", command=self.limpar_busca_e_filtros, **btn_estilo)
-        btn_limpar.pack(side="left", padx=(2, 0))
-        btn_limpar.bind("<Enter>", lambda e: btn_limpar.config(bg=self.cor_hover_btn))
-        btn_limpar.bind("<Leave>", lambda e: btn_limpar.config(bg=self.cor_btn_menu))
+        btn_utilidades = tk.Menubutton(search_frame, text="➕ UTILIDADES", **btn_estilo)
+        menu_utilidades = tk.Menu(btn_utilidades, tearoff=0, bg=self.bg_card, fg=self.cor_texto, font=("Segoe UI", 9))
+        menu_utilidades.add_command(label="Calculadora", command=lambda: self.aplicar_utilidades("Calculadora"))
+        menu_utilidades.add_command(label="Calendário", command=lambda: self.aplicar_utilidades("Calendário"))
+        menu_utilidades.add_command(label="Anotações", command=lambda: self.aplicar_utilidades("Anotações"))
+        menu_utilidades.add_separator()
+        menu_utilidades.add_command(label="Configurações", command=lambda: self.aplicar_utilidades("Configurações"))
+        
+        btn_utilidades.config(menu=menu_utilidades)
+        btn_utilidades.pack(side="right", padx=2)
+        btn_utilidades.bind("<Enter>", lambda e: btn_utilidades.config(bg=self.cor_hover_btn))
+        btn_utilidades.bind("<Leave>", lambda e: btn_utilidades.config(bg=self.cor_btn_menu))
 
     def _remover_placeholder(self, event):
         if self.ent_busca.get() == self.placeholder_busca:
@@ -231,6 +239,11 @@ class SistemaAleSapatilhas:
         # Aqui podemos interceptar qual botão foi clicado para abrir sub-caixas ou ordenar a Treeview
         messagebox.showinfo("Filtros", f"Filtro por '{tipo_filtro}' acionado.")
 
+    def aplicar_utilidades(self, tipo_utilidade):
+        """Garante o gancho para aplicar inteligência de utilidades baseada no modo ativo."""
+        # Aqui podemos interceptar qual botão foi clicado para abrir sub-caixas com ferrramentas como calculadora, calendário, etc.
+        messagebox.showinfo("Utilidades", f"Utilidade por '{tipo_utilidade}' acionada.")
+    
     def limpar_busca_e_filtros(self):
         self.ent_busca.delete(0, tk.END)
         self._inserir_placeholder(None)
@@ -657,23 +670,11 @@ class SistemaAleSapatilhas:
     
     # --- Função de visualização detalhada para vendas, que abre uma janela mostrando um resumo completo da venda selecionada, incluindo itens, cliente, forma de pagamento e status ---
     def visualizar_venda(self):
+        """Correção crítica: Instancia um tk.Toplevel em vez de chamar self.title."""
         item = self.tree.selection()
-        if not item:
-            return
+        if not item: return
         id_venda = item[0]
 
-        # --- Paleta de cores ---
-        paleta = ui_utils.get_paleta()
-        self.bg_fundo = paleta["bg_fundo"]
-        self.bg_card = paleta["bg_card"]
-        self.cor_texto = paleta["cor_texto"]
-        self.cor_destaque = paleta["cor_destaque"]
-        
-        self.title("Recibo de Venda")
-        self.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(self, largura_desejada=560, altura_desejada=620)
-        
-        # Buscar dados da venda
         with database.conectar() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -691,59 +692,49 @@ class SistemaAleSapatilhas:
             dados = cursor.fetchone()
         
         if not dados:
-            messagebox.showerror("Erro", "Venda não encontrada!", parent=self)
-            self.destroy()
+            messagebox.showerror("Erro", "Venda não encontrada!", parent=self.root)
             return
         
-        # Criar interface
-        main_frame = tk.Frame(self, bg=self.bg_fundo, padx=20, pady=20)
+        # Criação da subjanela correta
+        janela = tk.Toplevel(self.root)
+        janela.title("Recibo Eletrônico de Venda")
+        janela.configure(bg=self.bg_fundo)
+        janela.transient(self.root)
+        janela.grab_set()
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=580, altura_desejada=620)
+        
+        main_frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
         
-        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, 
-                 fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 15))
         
-        # Informações da venda e cliente
         info_text = f"""
 === DADOS DA VENDA ===
 ID da Venda: {dados[0]}
-Data: {dados[18]}
+Data: {self.formatar_data_exibicao(dados[19])}
 Status: {dados[20]}
 Vendedor: {dados[21] or 'N/A'}
 
 === DADOS DO CLIENTE ===
 Nome: {dados[1]}
-CPF: {dados[2]}
-Telefone: {dados[3]}
-Email: {dados[4] or 'N/A'}
-Aniversário: {dados[5] or 'N/A'}
-Tamanho Calçado: {dados[6] or 'N/A'}
-Endereço: {dados[7] or 'N/A'}
-Bairro: {dados[8] or 'N/A'}
-Cidade: {dados[9] or 'N/A'}
-CEP: {dados[10] or 'N/A'}
-Observação: {dados[11] or 'N/A'}
-Limite de Crédito: R$ {dados[12]:.2f}
-Status Cliente: {dados[13]}
+CPF: {dados[2]} | Tel: {dados[3]}
+Endereço: {dados[7] or 'N/A'}, Bairro: {dados[8] or 'N/A'} - {dados[9] or 'N/A'}
+Limite de Crédito: R$ {dados[12]:.2f} | Status Cliente: {dados[13]}
 
-=== DADOS FINANCEIROS ===
+=== FINANCEIRO ===
 Valor Bruto: R$ {dados[14]:.2f}
 Desconto: R$ {dados[15]:.2f}
-Valor Total: R$ {dados[16]:.2f}
-Forma de Pagamento: {dados[17]}
-Parcelas: {dados[19]}x
+Valor Líquido Total: R$ {dados[16]:.2f}
+Forma de Pagamento: {dados[17]} ({dados[18]}x)
 
 === PRODUTOS VENDIDOS ===
 {dados[22]}
         """
         
-        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
-                           font=("Courier New", 9), justify="left", relief="solid", borderwidth=1)
-        lbl_info.pack(fill="both", expand=True, pady=(0, 20))
+        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 9), justify="left", relief="solid", borderwidth=1, padx=10, pady=10)
+        lbl_info.pack(fill="both", expand=True, pady=(0, 15))
         
-        # Botão fechar
-        tk.Button(main_frame, text="FECHAR", bg=self.cor_destaque, fg="white",
-                 font=("Segoe UI", 10, "bold"), command=self.destroy).pack()
-        
+        tk.Button(main_frame, text="FECHAR RECEITO", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
     def visualizar_cliente(self):
         item = self.tree.selection()
         if not item: return
