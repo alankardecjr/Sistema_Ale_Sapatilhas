@@ -2,7 +2,7 @@
 gerenciar_despesas.py — Módulo financeiro de SAÍDAS (contas a pagar).
 
 Escopo:
-  - Cadastro e edição de despesas (campo fornecedor facultativo/nominal)
+  - Cadastro e edição de despesas vinculadas a fornecedor (tabela clientes, tipo='Fornecedor')
   - Parcelamento, pagamento parcial (valor_pago) e histórico na Treeview interna
 
 Não altera estoque nem vendas — responsabilidade exclusiva do financeiro.
@@ -55,6 +55,8 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         
         if dados_despesa:
             self.preencher_dados(dados_despesa)
+        else:
+            self.pesquisar_fornecedores()
             
         self.grab_set()
 
@@ -113,10 +115,24 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
         main_frame.columnconfigure(2, weight=1)
+     
+        # --- Helpers de estilo (Hover e Input) ---
+        def aplicar_estilo_foco(ent):
+            def on_enter(e):
+                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
+            def on_leave(e):
+                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
+            def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
+            def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
+            ent.bind("<Enter>", on_enter)
+            ent.bind("<Leave>", on_leave)
+            ent.bind("<FocusIn>", on_focus_in)
+            ent.bind("<FocusOut>", on_focus_out)
         
         # Cabeçalho do Módulo
         tk.Label(main_frame, text=" 💸 Gerenciamento de Despesas (Saídas)", bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
 
+        # Buscar rapida retirada
         # --- FORMULÁRIO DE LANÇAMENTO ---
         form_frame = tk.LabelFrame(main_frame, text=" Dados da Despesa ", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 9, "bold"), padx=10, pady=10, relief="solid", borderwidth=1)
         form_frame.grid(row=2, column=0, columnspan=3, sticky="ew")
@@ -129,8 +145,7 @@ class JanelaGerenciarDespesas(tk.Toplevel):
             self.aplicar_estilo_foco(ent)
             return ent
 
-        # Fornecedor agora é Nominal e Facultativo (removido o asterisco de obrigatório)
-        self.ent_forn_nome = criar_campo_form("FORNECEDOR NOMINAL", 0, 0, c_span=2)
+        self.ent_forn_nome = criar_campo_form("FORNECEDOR NOMINAL*", 0, 0, c_span=2)
         self.ent_desc = criar_campo_form("DESCRIÇÃO DA DESPESA*", 0, 2, c_span=1)
 
         # Valores, Ajustes de Encargos/Descontos e Pagamentos Parciais
@@ -201,19 +216,19 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.tree_parcelas.grid(row=4, column=0, columnspan=3, sticky="ew", padx=5)
         self.tree_parcelas.bind("<<TreeviewSelect>>", self.carregar_parcela_selecionada)
 
-        # --- BOTÕES DE AÇÃO OPERACIONAL ---
+        # --- BOTÕES DE AÇÃO OPERACIONAL (Dual Mode e Hover) ---
         texto_btn = "ATUALIZAR DESPESA" if self.despesa_id else "SALVAR DESPESA"
         self.btn_salvar = tk.Button(main_frame, text=texto_btn, bg=self.cor_btn_acao, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.validar_e_salvar)
         self.btn_salvar.grid(row=7, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
         
         self.btn_deletar = tk.Button(main_frame, text="EXCLUIR REGISTRO FINANCEIRO", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.excluir_crud)
         self.btn_deletar.grid(row=6, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
-        self.btn_deletar.grid_remove()
+        self.btn_deletar.grid_remove() # Exibir apenas em edições
 
         self.btn_cancelar = tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_btn_sair, fg="white", font=("Segoe UI", 10, "bold"), relief="flat", cursor="hand2", command=self.destroy)
         self.btn_cancelar.grid(row=20, column=0, columnspan=3, pady=(5, 0), sticky="ew", ipady=4)
       
-        # Bind Hovers
+       # Bind Hovers
         self.btn_salvar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
         self.btn_salvar.bind("<Leave>", lambda e: e.widget.config(bg=self.cor_btn_acao))
         self.btn_cancelar.bind("<Enter>", lambda e: e.widget.config(bg=self.cor_hover_btn))
@@ -230,6 +245,36 @@ class JanelaGerenciarDespesas(tk.Toplevel):
             self.ent_parc.delete(0, tk.END)
             self.ent_parc.insert(0, "1")
         self.atualizar_calculos()
+
+    # pesquisar e selecionar fornecedores para vincular à despesa
+    def pesquisar_fornecedores(self, event=None):
+        termo = self.ent_busca_forn.get().lower()
+        if termo == self.placeholder_busca.lower(): termo = ""
+        self.tree_forn.delete(*self.tree_forn.get_children())
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, nome, telefone, status_cliente FROM clientes WHERE tipo='Fornecedor' AND (nome LIKE ? OR telefone LIKE ?)", (f"%{termo}%", f"%{termo}%"))
+            for f in cursor.fetchall():
+                self.tree_forn.insert("", "end", values=f)
+
+    def selecionar_fornecedor(self, event=None):
+        sel = self.tree_forn.selection()
+        if not sel: return
+        dados = self.tree_forn.item(sel[0], "values")
+        self.fornecedor_selecionado_id = dados[0]
+        
+        with database.conectar() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT cpf, email, endereco_completo, observacao FROM clientes WHERE id=?", (self.fornecedor_selecionado_id,))
+            extra = cursor.fetchone()
+        
+        self.ent_forn_nome.delete(0, tk.END)
+        self.ent_forn_nome.insert(0, dados[1])
+        
+        txt = f"Razão/Nome: {dados[1]} | Tel: {dados[2]} | Doc: {extra[0] or 'N/A'}\nEndereço: {extra[2] or 'N/A'}"
+        self.lbl_detalhes_contato.config(text=txt, font=("Segoe UI", 9, "bold"), fg=self.cor_texto)
+
 
     def atualizar_calculos(self):
         try:
@@ -268,7 +313,7 @@ class JanelaGerenciarDespesas(tk.Toplevel):
     def carregar_parcela_selecionada(self, event=None):
         sel = self.tree_parcelas.selection()
         if not sel: return
-        id_f = self.tree_parcelas.item(sel[0], "values")[0]
+        id_f = self.tree_parcelas.item(sel[0], "values")[[0]]
         
         with database.conectar() as conn:
             cursor = conn.cursor()
@@ -277,7 +322,13 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         if d: self.preencher_dados(d)
 
     def preencher_dados(self, d):
-        self.despesa_id = d[0]        
+        self.despesa_id = d[0]
+        self.fornecedor_selecionado_id = d[25] if len(d) > 25 and d[25] else None
+        if not self.fornecedor_selecionado_id and d[5]:
+            with database.conectar() as conn:
+                r = conn.execute("SELECT id FROM clientes WHERE tipo='Fornecedor' AND nome=? LIMIT 1", (d[5],)).fetchone()
+                if r:
+                    self.fornecedor_selecionado_id = r[0]
         self.ent_forn_nome.delete(0, tk.END); self.ent_forn_nome.insert(0, d[5] if d[5] else "")
         self.ent_desc.delete(0, tk.END); self.ent_desc.insert(0, d[6] if d[6] else "")
         
@@ -306,7 +357,10 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         self.salvar_crud()
 
     def salvar_crud(self):
-        nome = self.ent_forn_nome.get().strip() or None  # Permite None/Vazio no banco
+        if not self.fornecedor_selecionado_id and not self.despesa_id:
+            messagebox.showwarning("Validação", "Selecione um fornecedor na lista de contatos.", parent=self)
+            return
+        nome = self.ent_forn_nome.get().strip()
         desc = self.ent_desc.get().strip()
         v_base = self.ent_valor_base.get().replace(",", ".")
         v_pago = self.ent_valor_pago.get().replace(",", ".")
@@ -317,9 +371,8 @@ class JanelaGerenciarDespesas(tk.Toplevel):
         dat_ven = self.formatar_data_para_bd(self.ent_vencimento.get())
         dat_pag = self.formatar_data_para_bd(self.ent_pagamento.get()) if self.ent_pagamento.get().strip() else None
 
-        # Validação atualizada: 'nome' (Fornecedor Nominal) foi retirado da obrigatoriedade
-        if not desc or not v_base or not dat_ven:
-            messagebox.showwarning("Validação", "Os campos Descrição, Valor Base e Vencimento são obrigatórios.", parent=self)
+        if not nome or not desc or not v_base or not dat_ven:
+            messagebox.showwarning("Validação", "Os campos Fornecedor, Descrição, Valor Base e Vencimento são obrigatórios.", parent=self)
             return
 
         try:
@@ -377,7 +430,6 @@ class JanelaGerenciarDespesas(tk.Toplevel):
                 self.destroy()
             else:
                 messagebox.showerror("Erro", msg, parent=self)
-
 
 if __name__ == "__main__":
     root = tk.Tk()
