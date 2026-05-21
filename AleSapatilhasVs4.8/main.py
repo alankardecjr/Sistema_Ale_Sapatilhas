@@ -204,7 +204,7 @@ class SistemaAleSapatilhas:
             "height": 1,
         }
 
-        self.btn_filtrar = tk.Button(search_frame, text="⏳ FILTRAR", command=self.abrir_menu_filtrar, **btn_estilo)
+        self.btn_filtrar = tk.Button(search_frame, text="⏳ FILTROS", command=self.abrir_menu_filtrar, **btn_estilo)
         self.btn_filtrar.pack(side="left", padx=2, ipady=6)
         self.btn_filtrar.bind("<Enter>", lambda e: self.btn_filtrar.config(bg=self.cor_hover_btn))
         self.btn_filtrar.bind("<Leave>", lambda e: self.btn_filtrar.config(bg=self.cor_btn_menu))
@@ -214,7 +214,7 @@ class SistemaAleSapatilhas:
         self.btn_limpar.bind("<Enter>", lambda e: self.btn_limpar.config(bg=self.cor_hover_btn))
         self.btn_limpar.bind("<Leave>", lambda e: self.btn_limpar.config(bg=self.cor_btn_menu))
 
-        self.btn_utilidades = tk.Button(search_frame, text="➕ UTILIDADES", command=self.abrir_menu_utilidades, **btn_estilo)
+        self.btn_utilidades = tk.Button(search_frame, text="➕ FERRAMENTAS", command=self.abrir_menu_utilidades, **btn_estilo)
         self.btn_utilidades.pack(side="right", padx=2, ipady=6)
         self.btn_utilidades.bind("<Enter>", lambda e: self.btn_utilidades.config(bg=self.cor_hover_btn))
         self.btn_utilidades.bind("<Leave>", lambda e: self.btn_utilidades.config(bg=self.cor_btn_menu))
@@ -955,7 +955,7 @@ class SistemaAleSapatilhas:
         
         # Criação da subjanela correta
         janela = tk.Toplevel(self.root)
-        janela.title("Recibo Eletrônico de Venda")
+        janela.title("Alê Sapatilhas - Formulario do Venda")
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
@@ -991,7 +991,7 @@ Forma de Pagamento: {dados[17]} ({dados[18]}x)
         
         lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 11), justify="left", relief="solid", borderwidth=1, padx=10, pady=10)
         lbl_info.pack(fill="both", expand=True, pady=(0, 15))
-        tk.Button(main_frame, text="FECHAR DETALHES", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
+        tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
     
     def visualizar_cliente(self):
         item = self.tree.selection()
@@ -1003,7 +1003,7 @@ Forma de Pagamento: {dados[17]} ({dados[18]}x)
         if not dados: return
         
         janela = tk.Toplevel(self.root)
-        janela.title("Visualizar Contato")
+        janela.title("Alê Sapatilhas - Formulario do Cliente")
         janela.configure(bg=self.bg_fundo)
         ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
 
@@ -1028,9 +1028,9 @@ Limite de Crédito: R$ {float(dados[12] or 0):.2f}
 Status: {dados[13]}
         """
 
-        tk.Label(frame, text="👤 VISUALIZAR CONTATO", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
+        tk.Label(frame, text="👤 DETALHES DO CLIENTE", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
         tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR DETALHES", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
+        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
     
     
     def visualizar_despesa(self):
@@ -1062,7 +1062,7 @@ Status: {dados[13]}
             entidade_label = "Fornecedor"
 
         janela = tk.Toplevel(self.root)
-        janela.title(f"Visualizar {tipo}")
+        janela.title(f"Alê Sapatilhas - Formulario da {tipo}")
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
@@ -1086,7 +1086,7 @@ Recorrência: {recorrencia or 'Não Recorrente'}
 
         tk.Label(frame, text=titulo, bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
         tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR DETALHES", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
+        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
 
     def visualizar_item(self):
         item = self.tree.selection()
