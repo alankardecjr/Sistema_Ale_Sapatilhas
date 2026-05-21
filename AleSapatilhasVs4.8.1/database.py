@@ -18,7 +18,7 @@ import config
 
 # --- Configuração do Banco de Dados (sempre na pasta do projeto) ---
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_NAME = os.path.join(_BASE_DIR, "AleSapatilhasVs4.8db")
+DB_NAME = os.path.join(_BASE_DIR, "AleSapatilhasVs4.8.1db")
 
 def conectar():
     """Estabelece a conexão com suporte a chaves estrangeiras."""
@@ -1027,4 +1027,4 @@ def listar_itens():
 
 if __name__ == "__main__":
     criar_tabelas()
-    print("✓ Banco de Dados Ale Sapatilhas Vs4.8 - Ativo.")
+    print("✓ Banco de Dados Ale Sapatilhas Vs4.8.1 - Ativo.")

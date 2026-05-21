@@ -108,15 +108,15 @@ class JanelaCadastroVendas(tk.Toplevel):
 
         botoes = [
             (titulo_acao, self.finalizar_venda),
-            ("✏️ EDITAR CLIENTE", self.editar_cliente_pdv),
             ("❌ REMOVER ITEM", self.remover_do_carrinho),
             ("↩ ESTORNAR VENDA", self.estornar_venda) if self.venda_id else None,
+            ("✏️ EDITAR CLIENTE", self.editar_cliente_pdv),
             ("👤 NOVO CLIENTE", self.abrir_novo_cliente),
             ("📦 NOVO PRODUTO", self.abrir_cadastro_produto),
-            ("🔄 LIMPAR DADOS", self.limpar_formulario),
             ("➕ FERRAMENTAS", self.abrir_menu_ferramentas),
+            ("🔄 LIMPAR DADOS", self.limpar_formulario),
             ("🔄 ATUALIZAR", self.listar_estoque_completo),
-            ("🚪 SAIR", self._fechar_pdv),
+            ("🚪 SAIR PDV", self._fechar_pdv),
         ]
 
         for item in botoes:

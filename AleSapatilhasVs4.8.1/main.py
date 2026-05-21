@@ -106,16 +106,16 @@ class SistemaAleSapatilhas:
         # (texto, callback, modo) — modo agrupa telas relacionadas na Treeview
         botoes = [
             ("➕ GERAR VENDAS", self.abrir_cadastro_vendas, "vendas"),
+            #("💰 GERAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
             ("📑 GERENCIAR VENDAS", self.exibir_vendas, "vendas"),
-            ("💰 GERENCIAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
             ("👥 GERENCIAR CONTATOS", self.exibir_clientes, "clientes"),
             ("👠 GERENCIAR PRODUTOS", self.exibir_produtos, "produtos"),
             ("👤 ADICIONAR CONTATOS", self.abrir_cadastro_cliente, "clientes"),
-            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),           
             ("📦 ADICIONAR PRODUTOS", self.abrir_cadastro_produto, "produtos"),
-            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
+            ("💸 ADICIONAR DESPESAS", self.abrir_gerenciar_despesas, "financeiro"),           
             ("📥 CONTAS A RECEBER", self.exibir_contas_a_receber, "contas_receber"),
             ("📤 CONTAS A PAGAR", self.exibir_contas_a_pagar, "contas_pagar"),
+            ("📉 FLUXO DE CAIXA", self.exibir_financeiro, "financeiro"),
             ("📊 DASHBOARD", self.exibir_dashboard, "dashboard"),
             ("🔄 ATUALIZAR", self.atualizar_lista, None),
             ("", None, None),
@@ -971,7 +971,7 @@ class SistemaAleSapatilhas:
         
         # Criação da subjanela correta
         janela = tk.Toplevel(self.root)
-        janela.title("Alê Sapatilhas - Formulario do Venda")
+        janela.title("Alê Sapatilhas - Formulario da Venda")
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
@@ -1071,10 +1071,10 @@ Status: {dados[13]}
         
         # Determinar se é receita ou despesa para ajustar labels
         if tipo == "Receita":
-            titulo = "💰 VISUALIZAR RECEITA"
+            titulo = "💰 DETALHES DA RECEITA"
             entidade_label = "Cliente"
         else:
-            titulo = "💰 VISUALIZAR DESPESA"
+            titulo = "💰 DETALHES DA DESPESA"
             entidade_label = "Fornecedor"
 
         janela = tk.Toplevel(self.root)
@@ -1115,7 +1115,7 @@ Recorrência: {recorrencia or 'Não Recorrente'}
             return
 
         janela = tk.Toplevel(self.root)
-        janela.title("Alê Sapatilhas — Detalhes do Produto")
+        janela.title("Alê Sapatilhas - Formulario do Produto")
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
@@ -1144,10 +1144,11 @@ Status: {dados[12]}
         tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
                  font=("Courier New", 10), justify="left", relief="solid", borderwidth=1,
                  padx=10, pady=10).pack(fill="both", expand=True, pady=(0, 15))
-        tk.Button(frame, text="FECHAR", bg=self.cor_destaque, fg="white",
+        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white",
                   font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
 
     # --- Função para atualizar a lista exibida com base no modo atual, garantindo que as alterações sejam refletidas imediatamente após ações de edição ou status ---
+  
     def atualizar_lista(self):
         """Recarrega a listagem conforme o modo_atual (botão Atualizar)."""
         if self.modo_atual == "clientes":
