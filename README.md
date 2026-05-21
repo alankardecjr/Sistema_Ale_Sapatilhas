@@ -14,7 +14,8 @@ Sistema desktop de gestão para loja de calçados e confecções, desenvolvido e
 | **Receitas** | Encargos de operadora (%), valor líquido, cartão débito/crédito, editar itens da venda |
 | **Main** | Coluna tipo em produtos e vendas; filtros sem confirmação excessiva; senha no fluxo de caixa |
 | **Anotações** | Persistência em SQLite (tabela `anotacoes`) |
-| **Segurança** | Senha do fluxo em `secrets.local.json` (não versionado) |
+| **Segurança** | Senha do fluxo em `secrets.local.json` (não versionado); senha padrão inicial `1234` se não existir o arquivo |
+| **Segurança Extra** | Alteração de senha exige senha atual, nova senha e confirmação. |
 
 ---
 
@@ -48,6 +49,7 @@ pip install -r requirements.txt
 # Senha do fluxo de caixa (obrigatório em produção)
 copy secrets.local.json.example secrets.local.json
 # Edite secrets.local.json e defina "senha_fluxo_caixa"
+# Se não existir o arquivo, a senha inicial padrão é 1234.
 
 # (Opcional) Dados de demonstração
 python populardb.py
@@ -56,6 +58,8 @@ python main.py
 ```
 
 O banco `AleSapatilhasVs4.8db` é criado na pasta do módulo. **Não versione** o arquivo `.db` nem `secrets.local.json` (veja `.gitignore`).
+
+> O sistema exibe datas em formato `DD/MM/YYYY` em todas as telas de usuário.
 
 ---
 

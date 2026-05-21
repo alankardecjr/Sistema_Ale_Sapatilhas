@@ -18,7 +18,7 @@ SECRETS_PATH = os.path.join(_BASE_DIR, "secrets.local.json")
 SECRETS_EXAMPLE_PATH = os.path.join(_BASE_DIR, "secrets.local.json.example")
 
 # Fallback apenas se secrets.local.json não existir (troque no primeiro uso)
-_SENHA_FLUXO_FALLBACK = "1525"
+_SENHA_FLUXO_FALLBACK = "1234"
 
 # --- Tipos de contato (tabela clientes — cadastro unificado) ---
 TIPO_CLIENTE = "Cliente"

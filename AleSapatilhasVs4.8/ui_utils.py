@@ -749,47 +749,108 @@ def abrir_anotacoes(parent):
 
 
 def abrir_configuracoes(parent):
-    """Configurações locais: senha do fluxo de caixa e orientações."""
+    """Configurações locais: opções e fluxo de troca de senha (Segurança)."""
     win = tk.Toplevel(parent)
     win.title("Configurações")
     win.configure(bg=PALETA["bg_fundo"])
     win.transient(parent)
-    calcular_dimensoes_janela(win, largura_desejada=480, altura_desejada=320)
+    calcular_dimensoes_janela(win, largura_desejada=560, altura_desejada=460)
+    win.resizable(True, True)
 
-    frame = tk.LabelFrame(
-        win, text=" Segurança — Fluxo de caixa ", bg=PALETA["bg_fundo"],
-        fg=PALETA["cor_destaque"], font=("Segoe UI", 10, "bold"),
-        relief="solid", borderwidth=1, padx=12, pady=10,
-    )
-    frame.pack(fill="both", expand=True, padx=16, pady=16)
+    topo = tk.Frame(win, bg=PALETA["bg_fundo"], padx=12, pady=8)
+    topo.pack(fill="x")
 
-    aviso = (
+    opcao_var = tk.StringVar(value="Opção 1")
+    opcoes = ["Opção 1", "Opção 2", "Opção 3", "Opção 4", "Segurança"]
+    tk.Label(topo, text="Seção:", bg=PALETA["bg_fundo"], font=("Segoe UI", 9, "bold")).pack(side="left")
+    tk.OptionMenu(topo, opcao_var, *opcoes).pack(side="left", padx=(8, 0))
+
+    conteudo = tk.Frame(win, bg=PALETA["bg_fundo"], padx=16, pady=8)
+    conteudo.pack(fill="both", expand=True)
+
+    aviso_base = (
         "A senha fica em secrets.local.json (não vai para o Git).\n"
         f"Arquivo: {config.SECRETS_PATH}"
     )
-    if not config.secrets_configurado():
-        aviso += "\n\n⚠ Usando senha padrão de instalação. Defina uma senha abaixo."
 
-    tk.Label(frame, text=aviso, bg=PALETA["bg_fundo"], font=("Segoe UI", 9),
-             justify="left", wraplength=420).pack(anchor="w", pady=(0, 10))
+    def limpar_conteudo():
+        for c in conteudo.winfo_children():
+            c.destroy()
 
-    tk.Label(frame, text="Nova senha do fluxo de caixa", bg=PALETA["bg_fundo"],
-             font=("Segoe UI", 9, "bold")).pack(anchor="w")
-    ent = tk.Entry(frame, font=("Segoe UI", 10), show="*", relief="flat",
-                   highlightthickness=1, highlightbackground=PALETA["cor_borda"])
-    ent.pack(fill="x", ipady=4, pady=(4, 8))
+    def mostrar_geral():
+        limpar_conteudo()
+        aviso = aviso_base
+        if not config.secrets_configurado():
+            aviso += "\n\n⚠ Usando senha padrão de instalação. Defina uma senha na seção Segurança."
+        tk.Label(conteudo, text=aviso, bg=PALETA["bg_fundo"], font=("Segoe UI", 9),
+                 justify="left", wraplength=420).pack(anchor="w")
 
-    def salvar():
-        ok, msg = config.salvar_senha_fluxo_caixa(ent.get())
-        if ok:
-            messagebox.showinfo("Configurações", msg, parent=win)
-            win.destroy()
+    def mostrar_seguranca():
+        limpar_conteudo()
+        tk.Label(conteudo, text="Segurança — Trocar senha do fluxo de caixa", bg=PALETA["bg_fundo"],
+                 fg=PALETA["cor_destaque"], font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 8))
+
+        tk.Label(conteudo, text=aviso_base, bg=PALETA["bg_fundo"], font=("Segoe UI", 9),
+                 justify="left", wraplength=420).pack(anchor="w", pady=(0, 8))
+
+        lbl_cur = tk.Label(conteudo, text="Senha atual", bg=PALETA["bg_fundo"], font=("Segoe UI", 9))
+        lbl_cur.pack(anchor="w")
+        ent_cur = tk.Entry(conteudo, font=("Segoe UI", 10), show="*", relief="flat",
+                           highlightthickness=1, highlightbackground=PALETA["cor_borda"])
+        ent_cur.pack(fill="x", ipady=4, pady=(4, 8))
+
+        lbl_new = tk.Label(conteudo, text="Nova senha", bg=PALETA["bg_fundo"], font=("Segoe UI", 9))
+        lbl_new.pack(anchor="w")
+        ent_new = tk.Entry(conteudo, font=("Segoe UI", 10), show="*", relief="flat",
+                           highlightthickness=1, highlightbackground=PALETA["cor_borda"])
+        ent_new.pack(fill="x", ipady=4, pady=(4, 8))
+
+        lbl_conf = tk.Label(conteudo, text="Confirmar nova senha", bg=PALETA["bg_fundo"], font=("Segoe UI", 9))
+        lbl_conf.pack(anchor="w")
+        ent_conf = tk.Entry(conteudo, font=("Segoe UI", 10), show="*", relief="flat",
+                            highlightthickness=1, highlightbackground=PALETA["cor_borda"])
+        ent_conf.pack(fill="x", ipady=4, pady=(4, 12))
+
+        def trocar_senha():
+            atual = (ent_cur.get() or "").strip()
+            nova = (ent_new.get() or "").strip()
+            conf = (ent_conf.get() or "").strip()
+            if not atual:
+                messagebox.showwarning("Segurança", "Informe a senha atual.", parent=win)
+                return
+            if atual != config.obter_senha_fluxo_caixa():
+                messagebox.showerror("Segurança", "Senha atual incorreta.", parent=win)
+                return
+            if not nova:
+                messagebox.showwarning("Segurança", "Informe a nova senha.", parent=win)
+                return
+            if nova != conf:
+                messagebox.showwarning("Segurança", "Nova senha e confirmação não conferem.", parent=win)
+                return
+            ok, msg = config.salvar_senha_fluxo_caixa(nova)
+            if ok:
+                messagebox.showinfo("Segurança", msg, parent=win)
+                win.destroy()
+            else:
+                messagebox.showerror("Segurança", msg, parent=win)
+
+        rodape_local = tk.Frame(conteudo, bg=PALETA["bg_fundo"])
+        rodape_local.pack(fill="x")
+        criar_botao_rodape(rodape_local, "Trocar senha", trocar_senha, "acao1").pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 4))
+        criar_botao_rodape(rodape_local, "Cancelar", win.destroy, "sair").pack(side="left", fill="x", expand=True, ipady=6)
+
+    def on_opcao_change(*_a):
+        sel = opcao_var.get()
+        if sel == "Segurança":
+            mostrar_seguranca()
         else:
-            messagebox.showwarning("Configurações", msg, parent=win)
+            mostrar_geral()
+
+    opcao_var.trace_add("write", on_opcao_change)
+    mostrar_geral()
 
     rodape = tk.Frame(win, bg=PALETA["bg_fundo"], padx=16, pady=8)
     rodape.pack(fill="x")
-    criar_botao_rodape(rodape, "Salvar senha", salvar, "acao1").pack(side="left", fill="x", expand=True, ipady=6, padx=(0, 4))
     criar_botao_rodape(rodape, "Fechar", win.destroy, "sair").pack(side="left", fill="x", expand=True, ipady=6)
 
 
@@ -815,3 +876,18 @@ def filtro_data_periodo(opcao, data_str):
     if opcao == "Mês":
         return dt.year == hoje.year and dt.month == hoje.month
     return True
+
+
+def formatar_data_exibicao(data_str):
+    """Normaliza e formata data para exibição DD/MM/YYYY.
+
+    Aceita strings em YYYY-MM-DD ou DD/MM/YYYY.
+    """
+    if not data_str:
+        return ""
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(str(data_str), fmt).strftime("%d/%m/%Y")
+        except ValueError:
+            continue
+    return str(data_str)

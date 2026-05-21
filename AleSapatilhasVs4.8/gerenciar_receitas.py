@@ -86,11 +86,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         return None
 
     def formatar_data_exibicao(self, data_str):
-        if not data_str: return ""
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-            try: return datetime.strptime(data_str, fmt).strftime("%d/%m/%Y")
-            except ValueError: continue
-        return data_str
+        return ui_utils.formatar_data_exibicao(data_str)
 
     def aplicar_estilo_foco(self, ent):
         def on_enter(e):

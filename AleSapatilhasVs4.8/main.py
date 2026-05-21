@@ -64,12 +64,8 @@ class SistemaAleSapatilhas:
         self.exibir_vendas()
 
     def formatar_data_exibicao(self, data_str):
-        """Converte data ISO (AAAA-MM-DD) para exibição DD/MM/AAAA."""
-        if data_str:
-            try: 
-                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except ValueError: return data_str
-        return ""
+        """Delega para o utilitário central de formatação (DD/MM/YYYY)."""
+        return ui_utils.formatar_data_exibicao(data_str)
     
     def _aplicar_estilo_foco(self, ent):
         """Aplica hover e destaque de foco em campos Entry da tela principal."""
@@ -163,9 +159,10 @@ class SistemaAleSapatilhas:
 
         self.tree = ttk.Treeview(self.tree_frame, show="headings", selectmode="browse")
         self.tree.pack(side="left", fill="both", expand=True)
-       
+
         # --- Bindings de interação ---
-        self.tree.bind("<Double-1>", lambda e: self.editar_selecionado())
+        # Duplo-clique abre a visualização detalhada apropriada ao modo atual
+        self.tree.bind("<Double-1>", lambda e: self.visualizar_selecionado())
         self.tree.bind("<Button-3>", self.mostrar_menu_contexto)
         self.tree.bind("<Motion>", self.focus_linha_mouse)
         
@@ -690,6 +687,46 @@ class SistemaAleSapatilhas:
         elif self.modo_atual == "vendas":
             self.editar_venda()
 
+    def visualizar_selecionado(self):
+        """Abre a janela de visualização apropriada ao `modo_atual` para o item selecionado.
+
+        Melhor usabilidade: duplo-clique mostra detalhes em vez de entrar em modo de edição.
+        """
+        item = self.tree.selection()
+        if not item:
+            return
+
+        # Despacha para o visualizador correto conforme o modo
+        if self.modo_atual == "clientes":
+            # Visualiza dados do cliente
+            try:
+                self.visualizar_cliente()
+            except Exception:
+                self.editar_selecionado()
+        elif self.modo_atual == "produtos":
+            # Visualiza produto se disponível
+            if hasattr(self, "visualizar_item"):
+                try:
+                    self.visualizar_item()
+                except Exception:
+                    self.editar_selecionado()
+            else:
+                self.editar_selecionado()
+        elif self.modo_atual in ("financeiro", "contas_receber", "contas_pagar"):
+            # Visualiza título financeiro (receita/despesa)
+            try:
+                self.visualizar_despesa()
+            except Exception:
+                self.editar_selecionado()
+        elif self.modo_atual == "vendas":
+            try:
+                self.visualizar_venda()
+            except Exception:
+                self.editar_venda()
+        else:
+            # Fallback: comportamento anterior
+            self.editar_selecionado()
+
     def _abrir_financeiro_com_senha(self):
         """Baixa de título somente após senha do fluxo de caixa."""
         if not ui_utils.solicitar_senha_fluxo(self.root):
@@ -876,7 +913,7 @@ class SistemaAleSapatilhas:
                 data_formatada = self.formatar_data_exibicao(data_existente)
                 pergunta = (
                     f"Este registro já foi pago em {data_formatada}.\n"
-                    f"Deseja alterar a data do pagamento para hoje ({datetime.now().strftime('%d/%m/%Y')})?"
+                    f"Deseja alterar a data do pagamento para hoje ({ui_utils.formatar_data_exibicao(datetime.now().strftime('%Y-%m-%d'))})?"
                 )
                 if messagebox.askyesno("Alterar Data de Pagamento", pergunta, parent=self.root):
                     data_pagamento = hoje
@@ -987,12 +1024,13 @@ class SistemaAleSapatilhas:
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=580, altura_desejada=620)
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=450, altura_desejada=690)
+        janela.resizable(True, True)
         
         main_frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
-        
-        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 15))
+
+        tk.Label(main_frame, text="🧾 DETALHES DA VENDA", bg=self.bg_fundo, fg=self.cor_destaque, font=("Arial Black", 12, "bold"), anchor="center").pack(fill="x", pady=(0, 15))
         
         info_text = f"""
 === DADOS DA VENDA ===
@@ -1017,9 +1055,21 @@ Forma de Pagamento: {dados[17]} ({dados[18]}x)
 {dados[22]}
         """
         
-        lbl_info = tk.Label(main_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 11), justify="left", relief="solid", borderwidth=1, padx=10, pady=10)
-        lbl_info.pack(fill="both", expand=True, pady=(0, 15))
-        tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
+        info_frame = tk.Frame(main_frame, bg=self.bg_card, relief="solid", borderwidth=1, padx=10, pady=10)
+        info_frame.pack(fill="both", expand=True, pady=(0, 15))
+
+        txt_info = tk.Text(info_frame, bg=self.bg_card, fg=self.cor_texto, font=("Arial Black", 10), wrap="word", bd=0, highlightthickness=0)
+        txt_info.insert("1.0", info_text.strip())
+        txt_info.tag_configure("center", justify="center")
+        txt_info.tag_add("center", "1.0", "end")
+        txt_info.configure(state="disabled")
+        txt_info.pack(fill="both", expand=True, side="left")
+
+        scroll = tk.Scrollbar(info_frame, command=txt_info.yview)
+        scroll.pack(side="right", fill="y")
+        txt_info.configure(yscrollcommand=scroll.set)
+
+        tk.Button(main_frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Arial Black", 10), command=janela.destroy).pack(pady=(10, 0))
     
     def visualizar_cliente(self):
         item = self.tree.selection()
@@ -1033,7 +1083,8 @@ Forma de Pagamento: {dados[17]} ({dados[18]}x)
         janela = tk.Toplevel(self.root)
         janela.title("Alê Sapatilhas - Formulario do Cliente")
         janela.configure(bg=self.bg_fundo)
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=450, altura_desejada=550)
+        janela.resizable(True, True)
 
         frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
@@ -1056,9 +1107,11 @@ Limite de Crédito: R$ {float(dados[12] or 0):.2f}
 Status: {dados[13]}
         """
 
-        tk.Label(frame, text="👤 DETALHES DO CLIENTE", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
-        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
+        tk.Label(frame, text="👤 DETALHES DO CLIENTE", bg=self.bg_fundo, fg=self.cor_destaque, font=("Arial Black", 12, "bold"), anchor="center").pack(fill="x", pady=(0, 20))
+        info_frame = tk.Frame(frame, bg=self.bg_card, relief="solid", borderwidth=1, padx=10, pady=10)
+        info_frame.pack(fill="both", expand=True)
+        tk.Label(info_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Arial Black", 10), justify="center", anchor="center", wraplength=460).pack(fill="both", expand=True)
+        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Arial Black", 10), command=janela.destroy).pack(pady=10)
     
     
     def visualizar_despesa(self):
@@ -1094,7 +1147,8 @@ Status: {dados[13]}
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=450, altura_desejada=550)
+        janela.resizable(True, True)
 
         frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
@@ -1104,17 +1158,19 @@ Status: {dados[13]}
 Descrição: {descricao}
 Valor: R$ {valor:.2f}
 Parcela: {parcela_atual} de {total_parcelas}
-Vencimento: {datetime.strptime(data_vencimento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_vencimento else 'N/A'}
-Data de Pagamento: {datetime.strptime(data_pagamento, '%Y-%m-%d').strftime('%d/%m/%Y') if data_pagamento else 'N/A'}
+     Vencimento: {ui_utils.formatar_data_exibicao(data_vencimento) if data_vencimento else 'N/A'}
+     Data de Pagamento: {ui_utils.formatar_data_exibicao(data_pagamento) if data_pagamento else 'N/A'}
 Forma de Pagamento: {forma_pagamento or 'N/A'}
 Categoria: {categoria or 'N/A'}
 Status: {status}
 Recorrência: {recorrencia or 'Não Recorrente'}
         """
 
-        tk.Label(frame, text=titulo, bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 14, "bold")).pack(pady=(0, 20))
-        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Courier New", 10), justify="left", relief="solid", borderwidth=1, padx=10, pady=10).pack(fill="both", expand=True)
-        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Segoe UI", 10, "bold"), command=janela.destroy).pack(pady=10)
+        tk.Label(frame, text=titulo, bg=self.bg_fundo, fg=self.cor_destaque, font=("Arial Black", 12, "bold"), anchor="center").pack(fill="x", pady=(0, 20))
+        info_frame = tk.Frame(frame, bg=self.bg_card, relief="solid", borderwidth=1, padx=10, pady=10)
+        info_frame.pack(fill="both", expand=True)
+        tk.Label(info_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto, font=("Arial Black", 10), justify="center", anchor="center", wraplength=460).pack(fill="both", expand=True)
+        tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white", font=("Arial Black", 10), command=janela.destroy).pack(pady=10)
 
     def visualizar_item(self):
         """Exibe ficha do produto (centralizado no shell principal)."""
@@ -1131,7 +1187,8 @@ Recorrência: {recorrencia or 'Não Recorrente'}
         janela.configure(bg=self.bg_fundo)
         janela.transient(self.root)
         janela.grab_set()
-        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=560, altura_desejada=620)
+        ui_utils.calcular_dimensoes_janela(janela, largura_desejada=450, altura_desejada=550)
+        janela.resizable(True, True)
 
         frame = tk.Frame(janela, bg=self.bg_fundo, padx=20, pady=20)
         frame.pack(fill="both", expand=True)
@@ -1152,12 +1209,13 @@ Fornecedor: {dados[11] or 'N/A'}
 Status: {dados[12]}
         """
         tk.Label(frame, text="📦 DETALHES DO PRODUTO", bg=self.bg_fundo, fg=self.cor_destaque,
-                 font=("Segoe UI", 14, "bold")).pack(pady=(0, 15))
-        tk.Label(frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
-                 font=("Courier New", 10), justify="left", relief="solid", borderwidth=1,
-                 padx=10, pady=10).pack(fill="both", expand=True, pady=(0, 15))
+                 font=("Arial Black", 12, "bold"), anchor="center").pack(fill="x", pady=(0, 15))
+        info_frame = tk.Frame(frame, bg=self.bg_card, relief="solid", borderwidth=1, padx=10, pady=10)
+        info_frame.pack(fill="both", expand=True, pady=(0, 15))
+        tk.Label(info_frame, text=info_text.strip(), bg=self.bg_card, fg=self.cor_texto,
+                 font=("Arial Black", 10), justify="center", anchor="center", wraplength=460).pack(fill="both", expand=True)
         tk.Button(frame, text="FECHAR JANELA", bg=self.cor_destaque, fg="white",
-                  font=("Segoe UI", 10, "bold"), command=janela.destroy).pack()
+                  font=("Arial Black", 10), command=janela.destroy).pack()
 
     # --- Função para atualizar a lista exibida com base no modo atual, garantindo que as alterações sejam refletidas imediatamente após ações de edição ou status ---
   

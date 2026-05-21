@@ -271,12 +271,7 @@ class JanelaCadastroClientes(tk.Toplevel):
             messagebox.showwarning("Aviso", f"Não foi possível manter esta janela em primeiro plano: {e}", parent=self)
 
     def formatar_data_exibicao(self, data_str):
-        if data_str:
-            try:
-                return datetime.strptime(data_str, "%Y-%m-%d").strftime("%d/%m/%Y")
-            except ValueError:
-                return data_str
-        return ""
+        return ui_utils.formatar_data_exibicao(data_str)
 
     def preencher_dados(self, d):
         # SELECT * : id, tipo, nome, cpf, telefone, email, aniversario, tamanho_calcado, endereco, bairro, cidade, cep, obs, limite, data_cadastro, status

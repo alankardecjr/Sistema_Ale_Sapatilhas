@@ -288,7 +288,8 @@ class JanelaCadastroVendas(tk.Toplevel):
         if not self.ent_busca_cli.get().strip():
             self.ent_busca_cli.insert(0, self.PLACEHOLDER_BUSCA_CLI)
             self.ent_busca_cli.config(fg="gray")
-        self._fechar_popup_clientes()
+        if self._popup_resultados and self._popup_resultados.winfo_exists():
+            self.after(120, self._fechar_popup_clientes)
 
     def _definir_busca_cliente(self, texto):
         self.ent_busca_cli.delete(0, tk.END)
