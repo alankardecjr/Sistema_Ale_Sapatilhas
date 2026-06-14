@@ -112,24 +112,9 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         main_frame.columnconfigure(1, weight=1)
         main_frame.columnconfigure(2, weight=1)
       
-        # --- Helpers de estilo (Hover e Input) ---
-        def aplicar_estilo_foco(ent):
-            def on_enter(e):
-                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_hover_field)
-            def on_leave(e):
-                if self.focus_get() != ent: ent.config(highlightbackground=self.cor_borda)
-            def on_focus_in(e): ent.config(highlightbackground=self.cor_destaque, highlightthickness=2)
-            def on_focus_out(e): ent.config(highlightbackground=self.cor_borda, highlightthickness=1)
-            ent.bind("<Enter>", on_enter)
-            ent.bind("<Leave>", on_leave)
-            ent.bind("<FocusIn>", on_focus_in)
-            ent.bind("<FocusOut>", on_focus_out)
-
         # Cabeçalho do Módulo
         tk.Label(main_frame, text=" 💰 Gerenciamento de Receitas (Entradas)", bg=self.bg_fundo, fg=self.cor_texto, font=("Segoe UI", 13, "bold")).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
        
-        #barra de busca de clientes e treewiew de clientes para vincular à receita
-
         # --- FORMULÁRIO DE LANÇAMENTO ---
         form_frame = tk.LabelFrame(main_frame, text=" Dados de Faturamento / Receita ", bg=self.bg_fundo, fg=self.cor_destaque, font=("Segoe UI", 9, "bold"), padx=10, pady=10, relief="solid", borderwidth=1)
         form_frame.grid(row=2, column=0, columnspan=3, sticky="ew")
@@ -175,11 +160,11 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         self.ent_lancamento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         ui_utils.anexar_botao_calendario(form_frame, self.ent_lancamento, row=7, column=0, sticky="e")
 
-        self.ent_vencimento = criar_campo_form("DATA VENCIMENTO PARCELA*", 6, 1)
+        self.ent_vencimento = criar_campo_form("DATA VENCIMENTO*", 6, 1)
         self.ent_vencimento.insert(0, datetime.now().strftime("%d/%m/%Y"))
         ui_utils.anexar_botao_calendario(form_frame, self.ent_vencimento, row=7, column=1, sticky="e")
 
-        self.ent_pagamento = criar_campo_form("DATA LIQUIDAÇÃO", 6, 2)
+        self.ent_pagamento = criar_campo_form("DATA PAGAMENTO", 6, 2)
         ui_utils.anexar_botao_calendario(form_frame, self.ent_pagamento, row=7, column=2, sticky="e")
 
         tk.Label(form_frame, text="STATUS RECEBIMENTO*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=8, column=0, sticky="w", padx=5)
@@ -192,13 +177,13 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         self.cb_cat.set("Venda")
         self.cb_cat.grid(row=9, column=1, sticky="ew", ipady=3, padx=5)
 
-        tk.Label(form_frame, text="FORMA LIQUIDAÇÃO*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=8, column=2, sticky="w", padx=5)
+        tk.Label(form_frame, text="FORMA PAGAMENTO*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=8, column=2, sticky="w", padx=5)
         self.cb_forma = ttk.Combobox(form_frame, values=self.list_formas, state="readonly", font=("Segoe UI", 9))
         self.cb_forma.set("PIX")
         self.cb_forma.grid(row=9, column=2, sticky="ew", ipady=3, padx=5)
         self.cb_forma.bind("<<ComboboxSelected>>", self._ao_mudar_forma_pagamento)
 
-        tk.Label(form_frame, text="DIVISÃO DE PARCELAS*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=0, sticky="w", padx=5)
+        tk.Label(form_frame, text="RECORRÊNCIA*", bg=self.bg_fundo, fg=self.cor_lbl, font=("Segoe UI", 8, "bold")).grid(row=10, column=0, sticky="w", padx=5)
         self.cb_recorrencia = ttk.Combobox(form_frame, values=self.list_recorrencia, state="readonly", font=("Segoe UI", 9))
         self.cb_recorrencia.set("Não Recorrente")
         self.cb_recorrencia.grid(row=11, column=0, sticky="ew", ipady=3, padx=5)
@@ -230,19 +215,19 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         frame_rodape.columnconfigure((0, 1, 2, 3), weight=1, uniform="rodape_rec")
         self.btn_salvar = ui_utils.criar_botao_rodape(
             frame_rodape,
-            ui_utils.texto_botao_salvar("Receita", bool(self.receita_id)),
+            ui_utils.texto_botao_salvar("Venda", bool(self.venda_id)),
             self.validar_e_salvar,
             "acao1",
             _pal,
         )
         self.btn_salvar.grid(row=0, column=0, sticky="ew", padx=(0, 4), ipady=6)
         self.btn_editar_itens = ui_utils.criar_botao_rodape(
-            frame_rodape, "Editar Itens da Venda", self._editar_itens_venda, "acao2", _pal,
+            frame_rodape, "Editar Venda", self._editar_itens_venda, "acao2", _pal,
         )
         self.btn_editar_itens.grid(row=0, column=1, sticky="ew", padx=4, ipady=6)
         self.btn_editar_itens.config(state="normal" if self.venda_id else "disabled")
         self.btn_deletar = ui_utils.criar_botao_rodape(
-            frame_rodape, "Estornar Receita", self.excluir_crud, "acao2", _pal,
+            frame_rodape, "Estornar Venda", self.excluir_crud, "acao2", _pal,
         )
         self.btn_deletar.grid(row=0, column=2, sticky="ew", padx=4, ipady=6)
         self.btn_deletar.config(state="normal" if self.receita_id else "disabled")
@@ -278,7 +263,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             self.ent_parc.insert(0, "1")
             self.cb_recorrencia.set("Não Recorrente")
             self.toggle_recorrencia()
-        elif forma == "Cartão de Crédito":
+        elif forma == "Cartão de Crédito" or forma == "Crediário":
             self.cb_recorrencia.set("Parcelado")
             self.toggle_recorrencia()
             try:
@@ -336,8 +321,15 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             ))
 
     def validar_e_salvar(self):
-        if not ui_utils.solicitar_senha_fluxo(self):
-            return
+        # CORREÇÃO DA SENHA:
+        # Se a janela foi aberta a partir do PDV (onde self.master é a JanelaCadastroVendas)
+        # NÃO solicita senha nenhuma para que a finalização ou reedição de itens flua direto.
+        # Solicita senha APENAS se for uma modificação manual de registro já salvo aberta a partir do menu principal.
+        from cadastro_vendas import JanelaCadastroVendas
+        if self.receita_id and not isinstance(self.master, JanelaCadastroVendas):
+            if not ui_utils.solicitar_senha_fluxo(self):
+                return
+                
         self.salvar_crud()
 
     def atualizar_calculos(self):
@@ -419,7 +411,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         
         self.cb_forma.set(d[12] if d[12] else "PIX")
         self.cb_recorrencia.set(d[13] if d[13] else "Não Recorrente")
-        self.cb_cat.set(d[18] if d[18] else "Venda")  # categoria
+        self.cb_cat.set(d[18] if d[18] else "Venda")
         self.cb_status.set(d[19])
         
         self.ent_parc.delete(0, tk.END)
@@ -442,7 +434,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             self.carregar_parcelas_historico(d[5], d[6])
 
     def _redistribuir_parcelas_venda(self, cursor, venda_id, valor_liquido, parcelas):
-        """Recria parcelas pendentes proporcionalmente ao valor líquido (cartão parcelado)."""
+        """Recria parcelas pendentes proporcionalmente ao valor líquido (cartão parcelado / fiado)."""
         cursor.execute(
             "DELETE FROM financeiro WHERE venda_id=? AND tipo='Receita' AND status != 'Pago'",
             (venda_id,),
@@ -512,7 +504,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
         parcelas_totais = int(self.ent_parc.get() or 1)
         if self.cb_forma.get() == "Cartão de Débito":
             parcelas_totais = 1
-        elif self.cb_forma.get() == "Cartão de Crédito":
+        elif self.cb_forma.get() == "Cartão de Crédito" or self.cb_forma.get() == "Crediário":
             parcelas_totais = max(1, parcelas_totais)
 
         st = self.cb_status.get()
@@ -556,7 +548,10 @@ class JanelaGerenciarReceitas(tk.Toplevel):
                         (self.cb_forma.get(), parcelas_totais, valor_liquido_calculado, self.venda_id),
                     )
                 conn.commit()
-                messagebox.showinfo("Sucesso", "Recebimento registrado.", parent=self)
+                # Removemos alertas poluentes no ato da venda
+                from cadastro_vendas import JanelaCadastroVendas
+                if not isinstance(self.master, JanelaCadastroVendas):
+                    messagebox.showinfo("Sucesso", "Recebimento registrado com sucesso.", parent=self)
             else:
                 messagebox.showwarning(
                     "Receitas",
@@ -568,8 +563,9 @@ class JanelaGerenciarReceitas(tk.Toplevel):
 
         if hasattr(self.master, "exibir_financeiro"):
             self.master.exibir_financeiro()
+            
         cb = self.on_sucesso
-        self.destroy()
+        self.destroy() # Libera o fluxo imediatamente para o wait_window do PDV limpar os campos
         if cb:
             cb()
 
@@ -582,6 +578,7 @@ class JanelaGerenciarReceitas(tk.Toplevel):
             messagebox.showinfo("Sucesso", "Título excluído do fluxo.", parent=self)
             if hasattr(self.master, "exibir_financeiro"): self.master.exibir_financeiro()
             self.destroy()
+
 
 if __name__ == "__main__":
     root = tk.Tk()

@@ -100,7 +100,7 @@ class SistemaAleSapatilhas:
 
         # (texto, callback, modo) — modo agrupa telas relacionadas na Treeview
         botoes = [
-            ("➕ NOVA VENDA", self.abrir_cadastro_vendas, "vendas"),
+            ("➕ PDV (VENDAS)", self.abrir_cadastro_vendas, "vendas"),
             #("💰 GERAR RECEITAS", self.abrir_gerenciar_receitas, "financeiro"),
             ("", None, None),
             ("📑 LISTAR VENDAS", self.exibir_vendas, "vendas"),

@@ -576,12 +576,14 @@ class JanelaCadastroVendas(tk.Toplevel):
         lista_final, desconto = self._dados_venda_para_api()
         total = self._total_liquido()
 
+        # Se for edição de uma venda já existente
         if self.venda_id:
             res, msg = database.atualizar_venda_comercial(self.venda_id, self.cliente_atual[0], lista_final, desconto)
             if not res:
                 messagebox.showerror("Erro", msg, parent=self)
                 return
             vid = self.venda_id
+        # Se for uma nova venda
         else:
             res, msg, vid = database.realizar_venda_pdv(self.cliente_atual[0], lista_final, desconto)
             if not res:
@@ -592,13 +594,36 @@ class JanelaCadastroVendas(tk.Toplevel):
             self.master.atualizar_lista()
 
         from gerenciar_receitas import JanelaGerenciarReceitas
-        JanelaGerenciarReceitas(
-            self.master,
+        
+        # 1. Liberamos o bloqueio (grab) do PDV temporariamente para a janela de receitas receber cliques
+        self.grab_release()
+        
+        # 2. Abrimos a janela de faturamento passando 'self' (PDV) como pai legítimo
+        janela_rec = JanelaGerenciarReceitas(
+            self,
             venda_id=vid,
-            on_sucesso=lambda: self._apos_pagamento_receitas(total),
+            on_sucesso=None # Removemos o callback antigo para controle síncrono total
         )
+        
+        # 3. Travamos a execução até que o operador salve e feche a tela de Receitas
+        self.wait_window(janela_rec)
+        
+        # 4. Ao retornar do fechamento da janela de receitas, limpamos o PDV para uma nova venda
         self._limpar_exceto_produtos()
         self._rastreador.marcar_limpo()
+        
+        # 5. Exibe a mensagem de finalização com sucesso na tela
+        messagebox.showinfo(
+            "PDV",
+            f"Operação finalizada com sucesso.\nVenda total: R$ {total:.2f}\nPDV pronto para nova venda.",
+            parent=self
+        )
+        
+        # 6. Se o PDV continuar aberto por algum motivo, restabelecemos o grab de segurança
+        try:
+            self.grab_set()
+        except Exception:
+            pass
 
     def _apos_pagamento_receitas(self, total):
         messagebox.showinfo(
