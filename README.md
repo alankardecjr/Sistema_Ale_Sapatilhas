@@ -1,143 +1,112 @@
-# Alê Sapatilhas — ERP / PDV Desktop
+# 🛍️ Ale Sapatilhas ERP
 
-Alê Sapatilhas é um sistema desktop de gestão comercial para loja de calçados e confecções, pensado para uso em vendas presenciais, controle de estoque, fluxo financeiro e gestão de contatos.
+Sistema desktop de gestão comercial desenvolvido em Python para auxiliar no gerenciamento de pequenas lojas de calçados e confecções.
 
-Construído com **Python 3**, **Tkinter** e **SQLite**, o projeto reúne recursos de PDV moderno, registro de receitas/despesas, cadastro unificado de clientes e fornecedores, e controles de segurança para fluxo de caixa.
+O projeto foi criado com o objetivo de automatizar processos administrativos do dia a dia, reunindo em uma única aplicação funcionalidades de cadastro, controle de estoque, vendas e gestão financeira.
 
----
-
-## Visão geral
-
-O sistema entrega uma experiência de portfólio sólida para aplicações comerciais:
-
-- Interface desktop responsiva com navegação por sidebar e telas modais centralizadas.
-- PDV com carrinho, desconto em reais, cliente buscável por popup e pagamento direto.
-- Modelo de dados unificado para contatos, incluindo clientes e fornecedores.
-- Estoque controlado somente após confirmação de pagamento, evitando baixa prematura.
-- Registro financeiro completo com contas a pagar, contas a receber e fluxo de caixa.
-- Ferramentas auxiliares de produtividade: calculadora, calendário e anotação.
+> **Status do projeto:** Em desenvolvimento 🚧
 
 ---
 
-## Recursos principais
+# 📋 Funcionalidades
 
-- PDV em duas colunas com seleção rápida de produtos e carrinho dinâmico.
-- Busca de cliente com autocomplete e preenchimento automático de ficha.
-- Desconto aplicado em valor fixo no fechamento da venda.
-- Tratamento de parcelas para cartão de crédito e pagamentos parcelados.
-- Registro de vendas pendentes e pagamentos com histórico financeiro.
-- Controle de estoque integrado ao processo de pagamento.
-- Cadastro de produtos com SKU, tipo, cor, tamanho, fornecedor e status.
-- Gestão unificada de contatos para clientes e fornecedores.
-- Registro de despesas e fluxo financeiro com senha de proteção de caixa.
-- Organização de entregas via tabelas SQL e transações atômicas em SQLite.
+Atualmente o sistema possui os seguintes módulos:
 
----
-
-## Tecnologias
-
-- Python 3.10+
-- Tkinter para interface gráfica nativa
-- SQLite para persistência local leve
-- Pillow para miniaturas de produto (opcional)
+* 👥 Cadastro de clientes
+* 📦 Cadastro de produtos
+* 💰 Registro de vendas
+* 📊 Controle de estoque
+* 💵 Contas a receber
+* 🧾 Contas a pagar
+* 📈 Controle financeiro
+* 🔍 Consultas e pesquisas
+* ⚙️ Configurações do sistema
 
 ---
 
-## Instalação
+# 🛠️ Tecnologias utilizadas
 
-1. Clone este repositório:
+* Python
+* Tkinter
+* SQLite
+* Git
+* GitHub
 
-```powershell
-git clone https://github.com/alankardecjr/Prototipo_Ale_Sapatilhas.git
-cd Prototipo_Ale_Sapatilhas\AleSapatilhasVs4.8.2
+---
+
+# 🎯 Objetivo do projeto
+
+Este projeto faz parte da minha evolução como desenvolvedor de software.
+
+Além de colocar em prática conceitos de programação, o sistema busca simular um ambiente real de gestão comercial, permitindo aplicar conhecimentos de organização de código, banco de dados, interface gráfica e modelagem de processos.
+
+---
+
+# 📁 Estrutura do projeto
+
+```text
+Ale-Sapatilhas-ERP/
+│
+├── src/
+├── database/
+├── assets/
+├── docs/
+├── tests/
+├── README.md
+└── requirements.txt
 ```
 
-2. Instale as dependências:
+*A estrutura poderá evoluir conforme novas funcionalidades forem sendo implementadas.*
 
-```powershell
-python -m pip install -r requirements.txt
+---
+
+# 🚀 Como executar
+
+1. Clone o repositório.
+
+```bash
+git clone https://github.com/alankardecjr/ale-sapatilhas-erp.git
 ```
 
-3. Configure a senha do fluxo de caixa:
+2. Acesse a pasta do projeto.
 
-```powershell
-copy secrets.local.json.example secrets.local.json
+```bash
+cd ale-sapatilhas-erp
 ```
 
-Edite `secrets.local.json` e defina o valor de `senha_fluxo_caixa`.
+3. Instale as dependências.
 
-4. Execute a aplicação:
+```bash
+pip install -r requirements.txt
+```
 
-```powershell
+4. Execute o sistema.
+
+```bash
 python main.py
 ```
 
 ---
 
-## Executando com dados de demonstração
+# 📌 Próximas melhorias
 
-Para popular a base com registros iniciais e testar rapidamente:
-
-```powershell
-python populardb.py
-```
-
----
-
-## Uso recomendado
-
-1. Cadastre fornecedores/clientes em **NOVO CONTATOS**.
-2. Cadastre produtos em **NOVO PRODUTOS**.
-3. Acesse **NOVA VENDAS** para abrir o PDV.
-4. Selecione cliente, adicione itens ao carrinho e finalize a venda.
-5. Registre pagamentos em **Gerenciar Receitas** para efetivar a baixa de estoque.
-6. Consulte despesas, contas a pagar e fluxo de caixa nas telas financeiras.
+* Dashboard com indicadores
+* Relatórios em PDF
+* Exportação para Excel
+* Melhor organização da arquitetura do projeto
+* Refatoração de módulos
+* Ampliação da cobertura de testes
 
 ---
 
-## Estrutura do projeto
+# 📸 Imagens
 
-```text
-AleSapatilhasVs4.8.2/
-├── main.py                 # Shell principal e navegação
-├── database.py             # Camada de persistência e regras de negócio
-├── ui_utils.py             # Estilos e helpers de interface
-├── cadastro_clientes.py    # Cadastro unificado de clientes/fornecedores
-├── cadastro_produtos.py    # Cadastro de produtos e estoque
-├── cadastro_vendas.py      # PDV e checkout de vendas
-├── gerenciar_despesas.py   # Lançamento e edição de despesas
-├── gerenciar_receitas.py   # Pagamentos e contas a receber
-├── populardb.py            # Import de dados de demonstração
-├── test_sistema.py         # Testes funcionais
-├── requirements.txt        # Dependências Python
-├── secrets.local.json.example
-└── AleSapatilhasVs4.8.2db   # Banco SQLite local (não versionar)
-```
+Em breve serão adicionadas capturas de tela e demonstrações da aplicação.
 
 ---
 
-## Testes
+# 👨‍💻 Sobre o desenvolvedor
 
-```powershell
-python test_sistema.py
-```
+Desenvolvido por **Alan Kardec**, estudante de Análise e Desenvolvimento de Sistemas e profissional em transição de carreira para a área de Tecnologia.
 
-O conjunto de testes cobre casos de cadastro de clientes, produtos, vendas, estoque, descontos e controle financeiro.
-
----
-
-## Notas de portfólio
-
-Este repositório demonstra habilidades em:
-
-- desenvolvimento de aplicações desktop com Python/Tkinter;
-- modelagem de dados e transações em SQLite;
-- arquitetura de interface com separação entre UI e lógica de negócios;
-- desenvolvimento de um fluxo comercial realista (PDV + financeiro);
-- proteção de dados sensíveis em configuração local.
-
----
-
-## Licença
-
-Projeto de portfólio. Uso livre para demonstração de habilidades profissionais em desenvolvimento de aplicações comerciais.
+Meu objetivo com este projeto é aplicar conhecimentos adquiridos durante os estudos e evoluir continuamente na construção de soluções para problemas reais.
