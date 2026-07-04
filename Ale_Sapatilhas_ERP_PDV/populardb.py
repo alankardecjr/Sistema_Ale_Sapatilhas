@@ -11,7 +11,7 @@ import random
 from datetime import datetime
 
 def popular_banco():
-    print("=== Iniciando Povoamento do Banco de Dados Ale Sapatilhas Vs4.8.2db ===")
+    print("=== Iniciando Povoamento do Banco de Dados AleSapatilhas.db ===")
     database.criar_tabelas()
 
     # --- Limpeza Controlada ---
@@ -159,7 +159,7 @@ def popular_banco():
         if id_rec_row:
             database.quitar_titulo_financeiro(id_rec_row[0], "Pix")
         
-    print("\n✅ Base de Testes Vs4.8.2db populada e auditada com sucesso!")
+    print("\n✅ Base de Testes AleSapatilhas.db populada e auditada com sucesso!")
 
 if __name__ == "__main__":
     popular_banco()
