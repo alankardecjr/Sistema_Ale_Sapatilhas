@@ -45,18 +45,29 @@ Além de colocar em prática conceitos de programação, o sistema busca simular
 # 📁 Estrutura do projeto
 
 ```text
-Ale-Sapatilhas-ERP/
+Ale_Sapatilhas_ERP_PDV/
 │
-├── src/
-├── database/
-├── assets/
-├── docs/
-├── tests/
-├── README.md
-└── requirements.txt
+├── cadastro_clientes.py
+├── cadastro_produtos.py
+├── cadastro_vendas.py
+├── config.py
+├── database.py
+├── executar_testes.bat
+├── gerenciar_despesas.py
+├── gerenciar_receitas.py
+├── INDICE_DOCUMENTACAO.md
+├── main.py
+├── populardb.py
+├── requirements.txt
+├── secrets.local.json.example
+├── test_sistema.py
+├── ui_utils.py
+├── notas_salvas/
+├── images/
+└── README.md
 ```
 
-*A estrutura poderá evoluir conforme novas funcionalidades forem sendo implementadas.*
+*O projeto está organizado na raiz do repositório para facilitar a análise e execução.*
 
 ---
 

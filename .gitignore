@@ -1,10 +1,8 @@
 # Banco SQLite local (dados sensíveis)
 *.db
-AleSapatilhasVs4.8.2/AleSapatilhasVs4.8.2db
 
 # Credenciais locais (não versionar)
 secrets.local.json
-AleSapatilhasVs4.8.2/secrets.local.json
 
 # Python
 __pycache__/
